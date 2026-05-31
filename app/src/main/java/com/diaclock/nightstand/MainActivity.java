@@ -68,6 +68,8 @@ public class MainActivity extends AppCompatActivity {
     // Alarm state variables
     private boolean alarmEnabled = true;
     private MediaPlayer mediaPlayer = null;
+    private boolean isAlarmSounding = false;
+    private long alarmSnoozeUntilTime = 0; // Epoch milliseconds until which alarms are silenced
 
     // Custom text color (default White)
     private int textColor = Color.WHITE;
@@ -142,7 +144,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupListeners() {
-        // Toggle Alarms Enabled state (Bell) with informative Toast hints
+        // Toggle Alarms Enabled state (Bell) with Toast hints
         ivAlarmBell.setOnClickListener(v -> {
             alarmEnabled = !alarmEnabled;
             SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
@@ -171,8 +173,23 @@ public class MainActivity extends AppCompatActivity {
             startActivity(intent);
         });
 
-        // Tapping the central screen color cycles is disabled now, as requested.
-        findViewById(R.id.centralClickArea).setOnClickListener(null);
+        // Enable clickability on the root layout to catch alarm dismiss taps anywhere on the screen
+        mainRootLayout.setClickable(true);
+        mainRootLayout.setFocusable(true);
+        mainRootLayout.setOnClickListener(v -> {
+            if (isAlarmSounding) {
+                snoozeAlarm();
+            }
+        });
+    }
+
+    private void snoozeAlarm() {
+        stopAlarmSound();
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        int snoozeMin = prefs.getInt("snooze_interval", 60);
+        // Silences alarms until epoch timestamp
+        alarmSnoozeUntilTime = System.currentTimeMillis() + (snoozeMin * 60 * 1000L);
+        Toast.makeText(this, "Сигнал отложен на " + snoozeMin + " мин.", Toast.LENGTH_LONG).show();
     }
 
     private void updateAlarmBellIcon() {
@@ -183,14 +200,27 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // Apply the customizable solid text color chosen in SettingsActivity
+    // Dynamic medical color-coding for glucose, clock remains customizable solid text color
     private void applyTextColor() {
         tvHours.setTextColor(textColor);
         tvColon.setTextColor(textColor);
         tvMinutes.setTextColor(textColor);
-        tvGlucose.setTextColor(textColor);
         
-        // Remove shaders to let the solid color shine
+        // Dynamically color-code glucose values separately from clock
+        if (lastGlucoseMmol > 0) {
+            if (lastGlucoseMmol < 3.9) {
+                tvGlucose.setTextColor(Color.parseColor("#FF3B30")); // Red: Hypoglycemia
+            } else if (lastGlucoseMmol >= 3.9 && lastGlucoseMmol <= 7.8) {
+                tvGlucose.setTextColor(Color.parseColor("#34C759")); // Green: Target normal range
+            } else if (lastGlucoseMmol > 7.8 && lastGlucoseMmol <= 13.9) {
+                tvGlucose.setTextColor(Color.parseColor("#FFD700")); // Yellow: High glucose
+            } else {
+                tvGlucose.setTextColor(Color.parseColor("#FF3B30")); // Red: Severe Hyperglycemia
+            }
+        } else {
+            tvGlucose.setTextColor(textColor); // Default color when offline
+        }
+        
         tvHours.getPaint().setShader(null);
         tvColon.getPaint().setShader(null);
         tvMinutes.getPaint().setShader(null);
@@ -202,7 +232,7 @@ public class MainActivity extends AppCompatActivity {
         tvGlucose.invalidate();
     }
 
-    // Convert xDrip+ English direction strings into clean Unicode trend arrows
+    // Convert xDrip+ English direction strings into Unicode trend arrows
     private String getTrendArrow(String direction) {
         if (direction == null) return "";
         switch (direction) {
@@ -378,7 +408,7 @@ public class MainActivity extends AppCompatActivity {
                         
                         runOnUiThread(() -> {
                             showNetworkWarning(false);
-                            // Append the parsed Unicode trend arrow directly onto tvGlucose text
+                            // Append the Unicode trend arrow directly onto tvGlucose text
                             tvGlucose.setText(String.format(Locale.US, "%.1f %s", glucoseMmol, getTrendArrow(finalDirection)));
                             applyTextColor();
                             checkAlarms(glucoseMmol);
@@ -411,7 +441,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // 5. Intelligent Multi-time Slot Alarms
+    // 5. Intelligent Multi-time Slot Alarms with Snooze & Auto-resets
     private void checkAlarms(double glucoseVal) {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         
@@ -432,13 +462,23 @@ public class MainActivity extends AppCompatActivity {
 
         Log.d(TAG, "Checking Alarms - Mode daytime: " + isDaytime + " | Sugar: " + glucoseVal + " | Bounds: " + currentLow + " - " + currentHigh);
 
-        if (glucoseVal < currentLow || glucoseVal > currentHigh) {
+        boolean isOutOfRange = glucoseVal < currentLow || glucoseVal > currentHigh;
+        boolean isSnoozed = System.currentTimeMillis() < alarmSnoozeUntilTime;
+
+        if (isOutOfRange) {
             if (alarmEnabled) {
-                startAlarmSound();
+                if (!isSnoozed) {
+                    startAlarmSound();
+                } else {
+                    stopAlarmSound();
+                }
             } else {
                 stopAlarmSound();
             }
         } else {
+            // Safety auto-reset: If glucose returns back to safe zones, cancel any active snooze
+            // so next out-of-range event triggers alarm instantly without waiting for the snooze window to finish.
+            alarmSnoozeUntilTime = 0;
             stopAlarmSound();
         }
     }
@@ -491,9 +531,11 @@ public class MainActivity extends AppCompatActivity {
                 mediaPlayer.setDataSource(this, alarmUri);
                 mediaPlayer.setLooping(true);
                 mediaPlayer.prepare();
+                
+                isAlarmSounding = true;
                 mediaPlayer.start();
                 
-                Toast.makeText(this, "Внимание! Сахар вышел из нормы!", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Внимание! Сахар вышел из нормы! (Тапните для откладывания)", Toast.LENGTH_LONG).show();
             } catch (Exception e) {
                 Log.e(TAG, "Playing alarm sound failed: " + e.getMessage());
             }
@@ -501,6 +543,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void stopAlarmSound() {
+        isAlarmSounding = false;
         if (mediaPlayer != null) {
             try {
                 if (mediaPlayer.isPlaying()) {
