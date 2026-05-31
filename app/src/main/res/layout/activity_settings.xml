@@ -221,6 +221,85 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
+        <!-- Alarm Sound Card -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/bg_card"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_alarm_sound"
+                    android:textColor="@color/colorPrimary"
+                    android:textStyle="bold"
+                    android:textSize="16sp"
+                    android:layout_marginBottom="12dp"/>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <!-- Selected Ringtone Name -->
+                    <TextView
+                        android:id="@+id/tvRingtoneName"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/default_ringtone_name"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp"
+                        android:layout_marginEnd="16dp"
+                        android:singleLine="true"
+                        android:ellipsize="end"/>
+
+                    <!-- Choose Melody Button -->
+                    <Button
+                        android:id="@+id/btnChooseRingtone"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/btn_choose_ringtone"
+                        android:textSize="12sp"
+                        android:textColor="@color/text_primary"
+                        android:backgroundTint="@color/bg_input"
+                        style="@style/Widget.MaterialComponents.Button"
+                        android:layout_marginEnd="8dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"/>
+
+                    <!-- Test Melody Button -->
+                    <Button
+                        android:id="@+id/btnTestRingtone"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/btn_test_alarm_start"
+                        android:textSize="12sp"
+                        android:textColor="@color/black"
+                        android:backgroundTint="@color/colorPrimary"
+                        style="@style/Widget.MaterialComponents.Button"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"/>
+
+                </LinearLayout>
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
         <!-- Time Slots Card -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"

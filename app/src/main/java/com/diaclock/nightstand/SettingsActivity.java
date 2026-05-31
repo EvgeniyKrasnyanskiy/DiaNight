@@ -1,7 +1,12 @@
 package com.diaclock.nightstand;
 
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.media.MediaPlayer;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -20,6 +25,7 @@ import java.util.Locale;
 public class SettingsActivity extends AppCompatActivity {
 
     private static final String PREFS_NAME = "DiaClockPrefs";
+    private static final int REQUEST_CODE_RINGTONE_PICKER = 999;
 
     private TextInputEditText etIpAddress;
     private TextInputEditText etApiSecret;
@@ -39,18 +45,24 @@ public class SettingsActivity extends AppCompatActivity {
     private Button btnColorBlue;
     private Button btnColorCustom;
 
+    // Alarm Ringtone UI Elements
+    private TextView tvRingtoneName;
+    private Button btnChooseRingtone;
+    private Button btnTestRingtone;
+
     private Button btnCancel;
     private Button btnSave;
 
-    // Default color is White
+    // State Variables
     private int selectedColor = Color.WHITE;
+    private String selectedRingtoneUri = null;
+    private MediaPlayer testMediaPlayer = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
 
-        // Landscape immersive view for settings
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                         | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
@@ -83,6 +95,10 @@ public class SettingsActivity extends AppCompatActivity {
         btnColorBlue = findViewById(R.id.btnColorBlue);
         btnColorCustom = findViewById(R.id.btnColorCustom);
 
+        tvRingtoneName = findViewById(R.id.tvRingtoneName);
+        btnChooseRingtone = findViewById(R.id.btnChooseRingtone);
+        btnTestRingtone = findViewById(R.id.btnTestRingtone);
+
         btnCancel = findViewById(R.id.btnCancel);
         btnSave = findViewById(R.id.btnSave);
     }
@@ -105,21 +121,59 @@ public class SettingsActivity extends AppCompatActivity {
 
         selectedColor = prefs.getInt("text_color", Color.WHITE);
         viewColorPreview.setBackgroundColor(selectedColor);
+
+        // Load and resolve chosen Ringtone Uri details
+        selectedRingtoneUri = prefs.getString("alarm_uri", null);
+        resolveRingtoneNameDisplay();
+    }
+
+    private void resolveRingtoneNameDisplay() {
+        if (selectedRingtoneUri == null) {
+            tvRingtoneName.setText(getString(R.string.default_ringtone_name));
+        } else if (selectedRingtoneUri.equals("silent")) {
+            tvRingtoneName.setText("Без звука 🔕");
+        } else {
+            try {
+                Ringtone r = RingtoneManager.getRingtone(this, Uri.parse(selectedRingtoneUri));
+                if (r != null) {
+                    tvRingtoneName.setText(r.getTitle(this));
+                } else {
+                    tvRingtoneName.setText("Пользовательский сигнал 🔔");
+                }
+            } catch (Exception e) {
+                tvRingtoneName.setText("Сигнал по умолчанию 🔔");
+            }
+        }
     }
 
     private void setupListeners() {
         btnCancel.setOnClickListener(v -> finish());
         btnSave.setOnClickListener(v -> saveSettings());
 
-        // Preset Colors Click Listeners
+        // Preset Colors
         btnColorWhite.setOnClickListener(v -> updateColor(Color.WHITE));
         btnColorGrey.setOnClickListener(v -> updateColor(Color.parseColor("#8E8E93")));
         btnColorDarkGrey.setOnClickListener(v -> updateColor(Color.parseColor("#3A3A3C")));
         btnColorGreen.setOnClickListener(v -> updateColor(Color.parseColor("#34C759")));
         btnColorBlue.setOnClickListener(v -> updateColor(Color.parseColor("#007AFF")));
 
-        // Custom Color Picker (RGB SeekBars Dialog)
         btnColorCustom.setOnClickListener(v -> openColorPickerDialog());
+
+        // Choose Ringtone Button Launcher
+        btnChooseRingtone.setOnClickListener(v -> {
+            Intent intent = new Intent(RingtoneManager.ACTION_RINGTONE_PICKER);
+            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM | RingtoneManager.TYPE_NOTIFICATION);
+            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Выберите мелодию тревоги");
+            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true);
+            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true);
+            if (selectedRingtoneUri != null && !selectedRingtoneUri.equals("silent")) {
+                intent.putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, Uri.parse(selectedRingtoneUri));
+            }
+            startActivityForResult(intent, REQUEST_CODE_RINGTONE_PICKER);
+        });
+
+        // Test Alarm Button Trigger
+        btnTestRingtone.setOnClickListener(v -> toggleTestAlarm());
     }
 
     private void updateColor(int color) {
@@ -128,12 +182,10 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void openColorPickerDialog() {
-        // Build layout programmatically to keep the architecture clean and self-contained
         LinearLayout dialogLayout = new LinearLayout(this);
         dialogLayout.setOrientation(LinearLayout.VERTICAL);
         dialogLayout.setPadding(50, 40, 50, 40);
 
-        // Preview box inside dialog
         final View dialogPreview = new View(this);
         LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(140, 140);
         previewParams.gravity = android.view.Gravity.CENTER_HORIZONTAL;
@@ -141,7 +193,7 @@ public class SettingsActivity extends AppCompatActivity {
         dialogPreview.setLayoutParams(previewParams);
         dialogPreview.setBackgroundColor(selectedColor);
 
-        // Red Slider
+        // Sliders
         final TextView tvRed = new TextView(this);
         tvRed.setText(getString(R.string.label_red) + ": " + Color.red(selectedColor));
         tvRed.setTextColor(Color.WHITE);
@@ -149,7 +201,6 @@ public class SettingsActivity extends AppCompatActivity {
         sbRed.setMax(255);
         sbRed.setProgress(Color.red(selectedColor));
 
-        // Green Slider
         final TextView tvGreen = new TextView(this);
         tvGreen.setText(getString(R.string.label_green_slider) + ": " + Color.green(selectedColor));
         tvGreen.setTextColor(Color.WHITE);
@@ -157,7 +208,6 @@ public class SettingsActivity extends AppCompatActivity {
         sbGreen.setMax(255);
         sbGreen.setProgress(Color.green(selectedColor));
 
-        // Blue Slider
         final TextView tvBlue = new TextView(this);
         tvBlue.setText(getString(R.string.label_blue_slider) + ": " + Color.blue(selectedColor));
         tvBlue.setTextColor(Color.WHITE);
@@ -165,7 +215,6 @@ public class SettingsActivity extends AppCompatActivity {
         sbBlue.setMax(255);
         sbBlue.setProgress(Color.blue(selectedColor));
 
-        // Listener to change previews and texts dynamically
         SeekBar.OnSeekBarChangeListener pickerListener = new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -207,6 +256,76 @@ public class SettingsActivity extends AppCompatActivity {
                 })
                 .setNegativeButton(getString(R.string.btn_cancel), null)
                 .show();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE_RINGTONE_PICKER && resultCode == RESULT_OK) {
+            Uri uri = data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
+            if (uri != null) {
+                selectedRingtoneUri = uri.toString();
+            } else {
+                selectedRingtoneUri = "silent";
+            }
+            resolveRingtoneNameDisplay();
+        }
+    }
+
+    private void toggleTestAlarm() {
+        if (testMediaPlayer != null && testMediaPlayer.isPlaying()) {
+            stopTestAlarm();
+        } else {
+            startTestAlarm();
+        }
+    }
+
+    private void startTestAlarm() {
+        if (selectedRingtoneUri != null && selectedRingtoneUri.equals("silent")) {
+            Toast.makeText(this, "Выбран бесшумный режим", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Uri ringtoneUri;
+        if (selectedRingtoneUri == null) {
+            ringtoneUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+            if (ringtoneUri == null) {
+                ringtoneUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+            }
+        } else {
+            ringtoneUri = Uri.parse(selectedRingtoneUri);
+        }
+
+        try {
+            testMediaPlayer = new MediaPlayer();
+            testMediaPlayer.setDataSource(this, ringtoneUri);
+            testMediaPlayer.setLooping(false);
+            testMediaPlayer.prepare();
+            testMediaPlayer.start();
+            btnTestRingtone.setText(getString(R.string.btn_test_alarm_stop));
+
+            // Automatically restore button label when playback finishes
+            testMediaPlayer.setOnCompletionListener(mp -> stopTestAlarm());
+        } catch (Exception e) {
+            Toast.makeText(this, "Не удалось запустить воспроизведение", Toast.LENGTH_SHORT).show();
+            stopTestAlarm();
+        }
+    }
+
+    private void stopTestAlarm() {
+        if (testMediaPlayer != null) {
+            try {
+                if (testMediaPlayer.isPlaying()) {
+                    testMediaPlayer.stop();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            } finally {
+                testMediaPlayer.release();
+                testMediaPlayer = null;
+            }
+        }
+        btnTestRingtone.setText(getString(R.string.btn_test_alarm_start));
     }
 
     private void saveSettings() {
@@ -286,6 +405,7 @@ public class SettingsActivity extends AppCompatActivity {
         editor.putFloat("night_low", nightLow);
         editor.putFloat("night_high", nightHigh);
         editor.putInt("text_color", selectedColor);
+        editor.putString("alarm_uri", selectedRingtoneUri);
         editor.apply();
 
         Toast.makeText(this, getString(R.string.msg_saved), Toast.LENGTH_SHORT).show();
@@ -299,5 +419,11 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void showToast(String message) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        stopTestAlarm();
     }
 }

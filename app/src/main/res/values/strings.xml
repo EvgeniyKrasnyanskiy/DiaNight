@@ -35,6 +35,13 @@
     <string name="label_green_slider">Зеленый</string>
     <string name="label_blue_slider">Синий</string>
     
+    <!-- Alarm Ringtone Section -->
+    <string name="label_alarm_sound">Сигнал тревоги</string>
+    <string name="btn_choose_ringtone">Выбрать мелодию</string>
+    <string name="btn_test_alarm_start">Проверить</string>
+    <string name="btn_test_alarm_stop">Остановить тест</string>
+    <string name="default_ringtone_name">Сигнал по умолчанию 🔔</string>
+    
     <string name="btn_save">Сохранить</string>
     <string name="btn_cancel">Отмена</string>
     

@@ -472,9 +472,21 @@ public class MainActivity extends AppCompatActivity {
     private void startAlarmSound() {
         if (mediaPlayer == null) {
             try {
-                Uri alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
-                if (alarmUri == null) {
-                    alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+                SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+                String alarmUriStr = prefs.getString("alarm_uri", null);
+                
+                if (alarmUriStr != null && alarmUriStr.equals("silent")) {
+                    return; // Silent mode chosen by the user
+                }
+
+                Uri alarmUri;
+                if (alarmUriStr == null) {
+                    alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+                    if (alarmUri == null) {
+                        alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+                    }
+                } else {
+                    alarmUri = Uri.parse(alarmUriStr);
                 }
                 
                 mediaPlayer = new MediaPlayer();
