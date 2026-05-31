@@ -1,11 +1,16 @@
 package com.diaclock.nightstand;
 
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.SeekBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.textfield.TextInputEditText;
@@ -26,8 +31,19 @@ public class SettingsActivity extends AppCompatActivity {
     private TextInputEditText etNightLow;
     private TextInputEditText etNightHigh;
 
+    private View viewColorPreview;
+    private Button btnColorWhite;
+    private Button btnColorGrey;
+    private Button btnColorDarkGrey;
+    private Button btnColorGreen;
+    private Button btnColorBlue;
+    private Button btnColorCustom;
+
     private Button btnCancel;
     private Button btnSave;
+
+    // Default color is White
+    private int selectedColor = Color.WHITE;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,6 +74,15 @@ public class SettingsActivity extends AppCompatActivity {
         etDayHigh = findViewById(R.id.etDayHigh);
         etNightLow = findViewById(R.id.etNightLow);
         etNightHigh = findViewById(R.id.etNightHigh);
+
+        viewColorPreview = findViewById(R.id.viewColorPreview);
+        btnColorWhite = findViewById(R.id.btnColorWhite);
+        btnColorGrey = findViewById(R.id.btnColorGrey);
+        btnColorDarkGrey = findViewById(R.id.btnColorDarkGrey);
+        btnColorGreen = findViewById(R.id.btnColorGreen);
+        btnColorBlue = findViewById(R.id.btnColorBlue);
+        btnColorCustom = findViewById(R.id.btnColorCustom);
+
         btnCancel = findViewById(R.id.btnCancel);
         btnSave = findViewById(R.id.btnSave);
     }
@@ -77,11 +102,111 @@ public class SettingsActivity extends AppCompatActivity {
         
         etNightLow.setText(String.format(Locale.US, "%.1f", prefs.getFloat("night_low", 3.6f)));
         etNightHigh.setText(String.format(Locale.US, "%.1f", prefs.getFloat("night_high", 11.0f)));
+
+        selectedColor = prefs.getInt("text_color", Color.WHITE);
+        viewColorPreview.setBackgroundColor(selectedColor);
     }
 
     private void setupListeners() {
         btnCancel.setOnClickListener(v -> finish());
         btnSave.setOnClickListener(v -> saveSettings());
+
+        // Preset Colors Click Listeners
+        btnColorWhite.setOnClickListener(v -> updateColor(Color.WHITE));
+        btnColorGrey.setOnClickListener(v -> updateColor(Color.parseColor("#8E8E93")));
+        btnColorDarkGrey.setOnClickListener(v -> updateColor(Color.parseColor("#3A3A3C")));
+        btnColorGreen.setOnClickListener(v -> updateColor(Color.parseColor("#34C759")));
+        btnColorBlue.setOnClickListener(v -> updateColor(Color.parseColor("#007AFF")));
+
+        // Custom Color Picker (RGB SeekBars Dialog)
+        btnColorCustom.setOnClickListener(v -> openColorPickerDialog());
+    }
+
+    private void updateColor(int color) {
+        selectedColor = color;
+        viewColorPreview.setBackgroundColor(selectedColor);
+    }
+
+    private void openColorPickerDialog() {
+        // Build layout programmatically to keep the architecture clean and self-contained
+        LinearLayout dialogLayout = new LinearLayout(this);
+        dialogLayout.setOrientation(LinearLayout.VERTICAL);
+        dialogLayout.setPadding(50, 40, 50, 40);
+
+        // Preview box inside dialog
+        final View dialogPreview = new View(this);
+        LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(140, 140);
+        previewParams.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        previewParams.bottomMargin = 40;
+        dialogPreview.setLayoutParams(previewParams);
+        dialogPreview.setBackgroundColor(selectedColor);
+
+        // Red Slider
+        final TextView tvRed = new TextView(this);
+        tvRed.setText(getString(R.string.label_red) + ": " + Color.red(selectedColor));
+        tvRed.setTextColor(Color.WHITE);
+        final SeekBar sbRed = new SeekBar(this);
+        sbRed.setMax(255);
+        sbRed.setProgress(Color.red(selectedColor));
+
+        // Green Slider
+        final TextView tvGreen = new TextView(this);
+        tvGreen.setText(getString(R.string.label_green_slider) + ": " + Color.green(selectedColor));
+        tvGreen.setTextColor(Color.WHITE);
+        final SeekBar sbGreen = new SeekBar(this);
+        sbGreen.setMax(255);
+        sbGreen.setProgress(Color.green(selectedColor));
+
+        // Blue Slider
+        final TextView tvBlue = new TextView(this);
+        tvBlue.setText(getString(R.string.label_blue_slider) + ": " + Color.blue(selectedColor));
+        tvBlue.setTextColor(Color.WHITE);
+        final SeekBar sbBlue = new SeekBar(this);
+        sbBlue.setMax(255);
+        sbBlue.setProgress(Color.blue(selectedColor));
+
+        // Listener to change previews and texts dynamically
+        SeekBar.OnSeekBarChangeListener pickerListener = new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                int r = sbRed.getProgress();
+                int g = sbGreen.getProgress();
+                int b = sbBlue.getProgress();
+                int newCol = Color.rgb(r, g, b);
+                
+                dialogPreview.setBackgroundColor(newCol);
+                tvRed.setText(getString(R.string.label_red) + ": " + r);
+                tvGreen.setText(getString(R.string.label_green_slider) + ": " + g);
+                tvBlue.setText(getString(R.string.label_blue_slider) + ": " + b);
+            }
+
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        };
+
+        sbRed.setOnSeekBarChangeListener(pickerListener);
+        sbGreen.setOnSeekBarChangeListener(pickerListener);
+        sbBlue.setOnSeekBarChangeListener(pickerListener);
+
+        dialogLayout.addView(dialogPreview);
+        dialogLayout.addView(tvRed);
+        dialogLayout.addView(sbRed);
+        dialogLayout.addView(tvGreen);
+        dialogLayout.addView(sbGreen);
+        dialogLayout.addView(tvBlue);
+        dialogLayout.addView(sbBlue);
+
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(getString(R.string.dialog_color_title))
+                .setView(dialogLayout)
+                .setPositiveButton("OK", (dialog, which) -> {
+                    int r = sbRed.getProgress();
+                    int g = sbGreen.getProgress();
+                    int b = sbBlue.getProgress();
+                    updateColor(Color.rgb(r, g, b));
+                })
+                .setNegativeButton(getString(R.string.btn_cancel), null)
+                .show();
     }
 
     private void saveSettings() {
@@ -127,7 +252,7 @@ public class SettingsActivity extends AppCompatActivity {
                 return;
             }
         } catch (NumberFormatException e) {
-            showToast("Please enter valid decimal values for Day Thresholds");
+            showToast("Введите корректные десятичные значения для порогов Дня");
             return;
         }
 
@@ -143,7 +268,7 @@ public class SettingsActivity extends AppCompatActivity {
                 return;
             }
         } catch (NumberFormatException e) {
-            showToast("Please enter valid decimal values for Night Thresholds");
+            showToast("Введите корректные десятичные значения для порогов Ночи");
             return;
         }
 
@@ -160,6 +285,7 @@ public class SettingsActivity extends AppCompatActivity {
         editor.putFloat("day_high", dayHigh);
         editor.putFloat("night_low", nightLow);
         editor.putFloat("night_high", nightHigh);
+        editor.putInt("text_color", selectedColor);
         editor.apply();
 
         Toast.makeText(this, getString(R.string.msg_saved), Toast.LENGTH_SHORT).show();
@@ -167,7 +293,6 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private boolean validateTimeFormat(String timeStr) {
-        // Regex validating standard HH:mm 24h format
         String timeRegex = "^([01]?[0-9]|2[0-3]):[0-5][0-9]$";
         return timeStr.matches(timeRegex);
     }
