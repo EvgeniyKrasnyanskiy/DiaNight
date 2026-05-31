@@ -45,7 +45,6 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvColon;
     private TextView tvMinutes;
     private TextView tvGlucose;
-    private TextView tvGlucoseUnit;
     private ImageView ivSettings;
     private ImageView ivAlarmBell;
     private ImageView ivNetworkWarning;
@@ -128,7 +127,6 @@ public class MainActivity extends AppCompatActivity {
         tvColon = findViewById(R.id.tvColon);
         tvMinutes = findViewById(R.id.tvMinutes);
         tvGlucose = findViewById(R.id.tvGlucose);
-        tvGlucoseUnit = findViewById(R.id.tvGlucoseUnit);
         ivSettings = findViewById(R.id.ivSettings);
         ivAlarmBell = findViewById(R.id.ivAlarmBell);
         ivNetworkWarning = findViewById(R.id.ivNetworkWarning);
