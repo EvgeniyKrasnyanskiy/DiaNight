@@ -66,6 +66,25 @@
                         android:singleLine="true"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
+                <!-- API Secret / Key -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/label_api_secret"
+                    app:hintTextColor="@color/colorPrimary"
+                    app:boxStrokeColor="@color/colorPrimary"
+                    android:layout_marginBottom="12dp"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etApiSecret"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="text"
+                        android:textColor="@color/text_primary"
+                        android:singleLine="true"/>
+                </com.google.android.material.textfield.TextInputLayout>
+
                 <!-- Toggle Interval -->
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"

@@ -4,7 +4,10 @@
     
     <!-- Settings Screen Labels -->
     <string name="label_ip_address">Nightscout IP Address</string>
-    <string name="hint_ip_address">e.g. 192.168.1.100</string>
+    <string name="hint_ip_address">e.g. 192.168.0.111</string>
+    
+    <string name="label_api_secret">API Secret / Key</string>
+    <string name="hint_api_secret">Enter xDrip API key</string>
     
     <string name="label_toggle_interval">Toggle Interval (seconds)</string>
     <string name="hint_toggle_interval">Default: 5</string>

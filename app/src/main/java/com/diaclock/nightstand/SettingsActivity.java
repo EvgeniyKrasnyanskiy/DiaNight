@@ -17,6 +17,7 @@ public class SettingsActivity extends AppCompatActivity {
     private static final String PREFS_NAME = "DiaClockPrefs";
 
     private TextInputEditText etIpAddress;
+    private TextInputEditText etApiSecret;
     private TextInputEditText etToggleInterval;
     private TextInputEditText etDayStart;
     private TextInputEditText etDayEnd;
@@ -49,6 +50,7 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void initViews() {
         etIpAddress = findViewById(R.id.etIpAddress);
+        etApiSecret = findViewById(R.id.etApiSecret);
         etToggleInterval = findViewById(R.id.etToggleInterval);
         etDayStart = findViewById(R.id.etDayStart);
         etDayEnd = findViewById(R.id.etDayEnd);
@@ -63,7 +65,8 @@ public class SettingsActivity extends AppCompatActivity {
     private void loadSavedSettings() {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         
-        etIpAddress.setText(prefs.getString("ip_address", "192.168.1.100"));
+        etIpAddress.setText(prefs.getString("ip_address", "192.168.0.111"));
+        etApiSecret.setText(prefs.getString("api_secret", "FBB9F80F9AC22E5B15F6DA1FFE599E14"));
         etToggleInterval.setText(String.valueOf(prefs.getInt("toggle_interval", 5)));
         
         etDayStart.setText(prefs.getString("day_start", "08:00"));
@@ -144,9 +147,12 @@ public class SettingsActivity extends AppCompatActivity {
             return;
         }
 
+        String apiSecret = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
+
         // Save successfully
         SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
         editor.putString("ip_address", ip);
+        editor.putString("api_secret", apiSecret);
         editor.putInt("toggle_interval", interval);
         editor.putString("day_start", dayStart);
         editor.putString("day_end", dayEnd);

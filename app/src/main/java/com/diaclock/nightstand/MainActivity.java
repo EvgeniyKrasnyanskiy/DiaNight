@@ -62,7 +62,8 @@ public class MainActivity extends AppCompatActivity {
     
     // Network variables
     private final OkHttpClient httpClient = new OkHttpClient();
-    private String serverIp = "192.168.1.100";
+    private String serverIp = "192.168.0.111";
+    private String apiSecret = "FBB9F80F9AC22E5B15F6DA1FFE599E14";
     private double lastGlucoseMmol = -1.0;
     private boolean hasConnectionError = false;
 
@@ -143,7 +144,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void loadSettings() {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        serverIp = prefs.getString("ip_address", "192.168.1.100");
+        serverIp = prefs.getString("ip_address", "192.168.0.111");
+        apiSecret = prefs.getString("api_secret", "FBB9F80F9AC22E5B15F6DA1FFE599E14");
         toggleIntervalSeconds = prefs.getInt("toggle_interval", 5);
         currentGradientIndex = prefs.getInt("gradient_index", 0);
         alarmEnabled = prefs.getBoolean("alarm_enabled", true);
@@ -313,9 +315,11 @@ public class MainActivity extends AppCompatActivity {
         // Standard Nightscout sgv.json layout endpoint
         String url = "http://" + serverIp + ":17580/sgv.json";
         
-        Request request = new Request.Builder()
-                .url(url)
-                .build();
+        Request.Builder requestBuilder = new Request.Builder().url(url);
+        if (apiSecret != null && !apiSecret.trim().isEmpty()) {
+            requestBuilder.addHeader("api-secret", apiSecret);
+        }
+        Request request = requestBuilder.build();
 
         httpClient.newCall(request).enqueue(new Callback() {
             @Override
