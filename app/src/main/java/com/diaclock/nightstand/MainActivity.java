@@ -2,8 +2,7 @@ package com.diaclock.nightstand;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.LinearGradient;
-import android.graphics.Shader;
+import android.graphics.Color;
 import android.media.MediaPlayer;
 import android.media.RingtoneManager;
 import android.net.Uri;
@@ -58,28 +57,21 @@ public class MainActivity extends AppCompatActivity {
     // Toggle state variables
     private boolean isShowingTime = true;
     private int toggleIntervalSeconds = 5;
-    private int currentGradientIndex = 0;
     
     // Network variables
     private final OkHttpClient httpClient = new OkHttpClient();
     private String serverIp = "192.168.0.111";
     private String apiSecret = "FBB9F80F9AC22E5B15F6DA1FFE599E14";
     private double lastGlucoseMmol = -1.0;
+    private String lastDirection = "";
     private boolean hasConnectionError = false;
 
     // Alarm state variables
     private boolean alarmEnabled = true;
     private MediaPlayer mediaPlayer = null;
 
-    // Predefined 5 Harmonious Color Gradients
-    // {StartColor, EndColor}
-    private final int[][] gradients = {
-            {0xFFFF512F, 0xFFDD2476}, // 1. Sunset (Red to Pink)
-            {0xFF4CA1AF, 0xFF2C3E50}, // 2. Sea (Cyan to Dark Blue)
-            {0xFF11998E, 0xFF38EF7D}, // 3. Forest (Green to Emerald)
-            {0xFF7F00FF, 0xFFE100FF}, // 4. Royal (Purple to Pink)
-            {0xFFF12711, 0xFFF5AF19}  // 5. Fire (Red to Yellow)
-    };
+    // Custom text color (default White)
+    private int textColor = Color.WHITE;
 
     // Breathing Animation variables
     private float currentAlpha = 1.0f;
@@ -117,7 +109,7 @@ public class MainActivity extends AppCompatActivity {
         // Reload all configuration values in case they were modified in SettingsActivity
         loadSettings();
         updateAlarmBellIcon();
-        applyCurrentGradient();
+        applyTextColor();
     }
 
     @Override
@@ -147,18 +139,25 @@ public class MainActivity extends AppCompatActivity {
         serverIp = prefs.getString("ip_address", "192.168.0.111");
         apiSecret = prefs.getString("api_secret", "FBB9F80F9AC22E5B15F6DA1FFE599E14");
         toggleIntervalSeconds = prefs.getInt("toggle_interval", 5);
-        currentGradientIndex = prefs.getInt("gradient_index", 0);
         alarmEnabled = prefs.getBoolean("alarm_enabled", true);
+        textColor = prefs.getInt("text_color", Color.WHITE);
     }
 
     private void setupListeners() {
-        // Toggle Alarms Enabled state (Bell)
+        // Toggle Alarms Enabled state (Bell) with informative Toast hints
         ivAlarmBell.setOnClickListener(v -> {
             alarmEnabled = !alarmEnabled;
             SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
             editor.putBoolean("alarm_enabled", alarmEnabled);
             editor.apply();
             updateAlarmBellIcon();
+            
+            // Show localized Toast hint
+            if (alarmEnabled) {
+                Toast.makeText(MainActivity.this, getString(R.string.hint_bell_active), Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(MainActivity.this, getString(R.string.hint_bell_disabled), Toast.LENGTH_SHORT).show();
+            }
             
             // Check alarms instantly based on state change
             if (!alarmEnabled) {
@@ -174,14 +173,8 @@ public class MainActivity extends AppCompatActivity {
             startActivity(intent);
         });
 
-        // Toggle Gradients on Central Tapping Area
-        findViewById(R.id.centralClickArea).setOnClickListener(v -> {
-            currentGradientIndex = (currentGradientIndex + 1) % gradients.length;
-            SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
-            editor.putInt("gradient_index", currentGradientIndex);
-            editor.apply();
-            applyCurrentGradient();
-        });
+        // Tapping the central screen color cycles is disabled now, as requested.
+        findViewById(R.id.centralClickArea).setOnClickListener(null);
     }
 
     private void updateAlarmBellIcon() {
@@ -192,38 +185,38 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // Dynamic linear gradients calculated relative to each text element width
-    private void applyCurrentGradient() {
-        int[] activeColors = gradients[currentGradientIndex];
-        int startColor = activeColors[0];
-        int endColor = activeColors[1];
-
-        // Hours
-        updateTextViewGradient(tvHours, tvHours.getText().toString(), startColor, endColor);
-        // Colon (always matched or styled)
-        updateTextViewGradient(tvColon, tvColon.getText().toString(), startColor, endColor);
-        // Minutes
-        updateTextViewGradient(tvMinutes, tvMinutes.getText().toString(), startColor, endColor);
-        // Glucose Value
-        updateTextViewGradient(tvGlucose, tvGlucose.getText().toString(), startColor, endColor);
+    // Apply the customizable solid text color chosen in SettingsActivity
+    private void applyTextColor() {
+        tvHours.setTextColor(textColor);
+        tvColon.setTextColor(textColor);
+        tvMinutes.setTextColor(textColor);
+        tvGlucose.setTextColor(textColor);
+        
+        // Remove shaders to let the solid color shine
+        tvHours.getPaint().setShader(null);
+        tvColon.getPaint().setShader(null);
+        tvMinutes.getPaint().setShader(null);
+        tvGlucose.getPaint().setShader(null);
+        
+        tvHours.invalidate();
+        tvColon.invalidate();
+        tvMinutes.invalidate();
+        tvGlucose.invalidate();
     }
 
-    private void updateTextViewGradient(TextView textView, String text, int startColor, int endColor) {
-        textView.setText(text);
-        // Schedule shader creation after layout measurements pass if needed
-        textView.post(() -> {
-            float width = textView.getPaint().measureText(text);
-            if (width <= 0) {
-                width = 300f; // Safe fallback measurement
-            }
-            Shader textShader = new LinearGradient(
-                    0, 0, width, 0,
-                    startColor, endColor,
-                    Shader.TileMode.CLAMP
-            );
-            textView.getPaint().setShader(textShader);
-            textView.invalidate();
-        });
+    // Convert xDrip+ English direction strings into clean Unicode trend arrows
+    private String getTrendArrow(String direction) {
+        if (direction == null) return "";
+        switch (direction) {
+            case "DoubleUp": return "⇈";
+            case "SingleUp": return "↑";
+            case "FortyFiveUp": return "↗";
+            case "Flat": return "→";
+            case "FortyFiveDown": return "↘";
+            case "SingleDown": return "↓";
+            case "DoubleDown": return "⇊";
+            default: return "";
+        }
     }
 
     // 1. Time Update Logic
@@ -238,7 +231,7 @@ public class MainActivity extends AppCompatActivity {
                 tvHours.setText(hoursStr);
                 tvMinutes.setText(minutesStr);
                 
-                applyCurrentGradient();
+                applyTextColor();
                 mainHandler.postDelayed(this, 1000); // Poll clock checks every second
             }
         };
@@ -264,7 +257,6 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
                 tvColon.setAlpha(currentAlpha);
-                // 50ms interval provides seamless 1-second dynamic transitions (fading down/up)
                 breathingHandler.postDelayed(this, 50);
             }
         };
@@ -284,8 +276,7 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     layoutTime.setVisibility(View.GONE);
                     layoutGlucose.setVisibility(View.VISIBLE);
-                    // Force redraw/re-render of glucose gradient since it is now visible
-                    applyCurrentGradient();
+                    applyTextColor();
                 }
 
                 mainHandler.postDelayed(this, toggleIntervalSeconds * 1000L);
@@ -294,7 +285,7 @@ public class MainActivity extends AppCompatActivity {
         mainHandler.postDelayed(toggleRunnable, toggleIntervalSeconds * 1000L);
     }
 
-    // 4. Nightscout Network Integration
+    // 4. Nightscout / xDrip Network Integration
     private void startNetworkPolling() {
         Runnable networkRunnable = new Runnable() {
             @Override
@@ -329,7 +320,6 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // Standard Nightscout sgv.json layout endpoint
         String url = "http://" + serverIp + ":17580/sgv.json";
         
         Request.Builder requestBuilder = new Request.Builder().url(url);
@@ -346,7 +336,7 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     showNetworkWarning(true);
                     tvGlucose.setText("---");
-                    applyCurrentGradient();
+                    applyTextColor();
                 });
             }
 
@@ -356,7 +346,7 @@ public class MainActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         showNetworkWarning(true);
                         tvGlucose.setText("---");
-                        applyCurrentGradient();
+                        applyTextColor();
                     });
                     return;
                 }
@@ -365,32 +355,41 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     JsonElement element = JsonParser.parseString(responseBody);
                     int sgv = 0;
+                    String direction = "";
                     
                     if (element.isJsonArray()) {
                         JsonArray array = element.getAsJsonArray();
                         if (array.size() > 0) {
                             sgv = array.get(0).getAsJsonObject().get("sgv").getAsInt();
+                            if (array.get(0).getAsJsonObject().has("direction")) {
+                                direction = array.get(0).getAsJsonObject().get("direction").getAsString();
+                            }
                         }
                     } else if (element.isJsonObject()) {
                         sgv = element.getAsJsonObject().get("sgv").getAsInt();
+                        if (element.getAsJsonObject().has("direction")) {
+                            direction = element.getAsJsonObject().get("direction").getAsString();
+                        }
                     }
 
                     if (sgv > 0) {
-                        // sgv mg/dL converted to mmol/L (divide by 18)
                         final double glucoseMmol = sgv / 18.0;
                         lastGlucoseMmol = glucoseMmol;
+                        final String finalDirection = direction;
+                        lastDirection = direction;
                         
                         runOnUiThread(() -> {
                             showNetworkWarning(false);
-                            tvGlucose.setText(String.format(Locale.US, "%.1f", glucoseMmol));
-                            applyCurrentGradient();
+                            // Append the parsed Unicode trend arrow directly onto tvGlucose text
+                            tvGlucose.setText(String.format(Locale.US, "%.1f %s", glucoseMmol, getTrendArrow(finalDirection)));
+                            applyTextColor();
                             checkAlarms(glucoseMmol);
                         });
                     } else {
                         runOnUiThread(() -> {
                             showNetworkWarning(true);
                             tvGlucose.setText("---");
-                            applyCurrentGradient();
+                            applyTextColor();
                         });
                     }
                 } catch (Exception e) {
@@ -398,7 +397,7 @@ public class MainActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         showNetworkWarning(true);
                         tvGlucose.setText("---");
-                        applyCurrentGradient();
+                        applyTextColor();
                     });
                 }
             }
@@ -446,7 +445,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // Robust daily minutes algorithm to compute daytime
     private boolean determineIsDaytime(String startStr, String endStr) {
         try {
             String[] startParts = startStr.split(":");
@@ -465,7 +463,6 @@ public class MainActivity extends AppCompatActivity {
             }
         } catch (Exception e) {
             Log.e(TAG, "Parsing day/night boundary string failed, using fallback: " + e.getMessage());
-            // Standard fallback: Daytime is 08:00 to 22:00
             Calendar now = Calendar.getInstance();
             int hour = now.get(Calendar.HOUR_OF_DAY);
             return hour >= 8 && hour < 22;
@@ -486,7 +483,7 @@ public class MainActivity extends AppCompatActivity {
                 mediaPlayer.prepare();
                 mediaPlayer.start();
                 
-                Toast.makeText(this, "Glucose Alert! Out of range!", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Внимание! Сахар вышел из нормы!", Toast.LENGTH_LONG).show();
             } catch (Exception e) {
                 Log.e(TAG, "Playing alarm sound failed: " + e.getMessage());
             }
