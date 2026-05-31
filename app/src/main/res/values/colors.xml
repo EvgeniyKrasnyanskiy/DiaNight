@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
+    
+    <!-- Dark Theme Backgrounds -->
+    <color name="bg_dark">#121212</color>
+    <color name="bg_card">#1E1E1E</color>
+    <color name="bg_input">#2C2C2C</color>
+    
+    <!-- Text Colors -->
+    <color name="text_primary">#E5E5EA</color>
+    <color name="text_secondary">#8E8E93</color>
+    
+    <!-- Status & State Colors -->
+    <color name="color_active_yellow">#FFD700</color>
+    <color name="color_disabled_grey">#555555</color>
+    <color name="color_warning_orange">#FF9500</color>
+    <color name="color_danger_red">#FF3B30</color>
+    <color name="color_safe_green">#34C759</color>
+    
+    <color name="colorPrimary">#BB86FC</color>
+    <color name="colorPrimaryDark">#3700B3</color>
+    <color name="colorAccent">#03DAC6</color>
+</resources>

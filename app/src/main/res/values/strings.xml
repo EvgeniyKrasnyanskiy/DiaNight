@@ -1,0 +1,30 @@
+<resources>
+    <string name="app_name">DiaClock</string>
+    <string name="title_settings">DiaClock Settings</string>
+    
+    <!-- Settings Screen Labels -->
+    <string name="label_ip_address">Nightscout IP Address</string>
+    <string name="hint_ip_address">e.g. 192.168.1.100</string>
+    
+    <string name="label_toggle_interval">Toggle Interval (seconds)</string>
+    <string name="hint_toggle_interval">Default: 5</string>
+    
+    <string name="label_day_time_range">Day Time Range</string>
+    <string name="label_day_start">Day Start (HH:mm)</string>
+    <string name="label_day_end">Day End (HH:mm)</string>
+    
+    <string name="label_day_thresholds">Day Glucose Thresholds (mmol/L)</string>
+    <string name="label_night_thresholds">Night Glucose Thresholds (mmol/L)</string>
+    
+    <string name="label_high_threshold">High Threshold</string>
+    <string name="label_low_threshold">Low Threshold</string>
+    
+    <string name="btn_save">Save Settings</string>
+    <string name="btn_cancel">Cancel</string>
+    
+    <string name="msg_invalid_ip">Please enter a valid IP address or hostname</string>
+    <string name="msg_invalid_interval">Interval must be at least 1 second</string>
+    <string name="msg_invalid_thresholds">High threshold must be greater than low threshold</string>
+    <string name="msg_invalid_time_format">Please enter time in HH:mm format</string>
+    <string name="msg_saved">Settings saved successfully</string>
+</resources>
