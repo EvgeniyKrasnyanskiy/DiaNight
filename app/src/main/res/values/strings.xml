@@ -42,6 +42,11 @@
     <string name="btn_test_alarm_stop">Остановить тест</string>
     <string name="default_ringtone_name">Сигнал по умолчанию 🔔</string>
     
+    <!-- Snooze Alarm Section -->
+    <string name="label_snooze_interval">Время откладывания тревоги (минут)</string>
+    <string name="hint_snooze_interval">По умолчанию: 60</string>
+    <string name="msg_invalid_snooze">Интервал откладывания должен быть не менее 1 минуты</string>
+    
     <string name="btn_save">Сохранить</string>
     <string name="btn_cancel">Отмена</string>
     

@@ -36,6 +36,7 @@ public class SettingsActivity extends AppCompatActivity {
     private TextInputEditText etDayHigh;
     private TextInputEditText etNightLow;
     private TextInputEditText etNightHigh;
+    private TextInputEditText etSnoozeInterval;
 
     private View viewColorPreview;
     private Button btnColorWhite;
@@ -86,6 +87,7 @@ public class SettingsActivity extends AppCompatActivity {
         etDayHigh = findViewById(R.id.etDayHigh);
         etNightLow = findViewById(R.id.etNightLow);
         etNightHigh = findViewById(R.id.etNightHigh);
+        etSnoozeInterval = findViewById(R.id.etSnoozeInterval);
 
         viewColorPreview = findViewById(R.id.viewColorPreview);
         btnColorWhite = findViewById(R.id.btnColorWhite);
@@ -118,6 +120,7 @@ public class SettingsActivity extends AppCompatActivity {
         
         etNightLow.setText(String.format(Locale.US, "%.1f", prefs.getFloat("night_low", 3.6f)));
         etNightHigh.setText(String.format(Locale.US, "%.1f", prefs.getFloat("night_high", 11.0f)));
+        etSnoozeInterval.setText(String.valueOf(prefs.getInt("snooze_interval", 60)));
 
         selectedColor = prefs.getInt("text_color", Color.WHITE);
         viewColorPreview.setBackgroundColor(selectedColor);
@@ -391,6 +394,20 @@ public class SettingsActivity extends AppCompatActivity {
             return;
         }
 
+        // 6. Snooze Interval Validation
+        String snoozeStr = etSnoozeInterval.getText() != null ? etSnoozeInterval.getText().toString().trim() : "";
+        int snoozeInterval;
+        try {
+            snoozeInterval = Integer.parseInt(snoozeStr);
+            if (snoozeInterval < 1) {
+                showToast(getString(R.string.msg_invalid_snooze));
+                return;
+            }
+        } catch (NumberFormatException e) {
+            showToast(getString(R.string.msg_invalid_snooze));
+            return;
+        }
+
         String apiSecret = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
 
         // Save successfully
@@ -406,6 +423,7 @@ public class SettingsActivity extends AppCompatActivity {
         editor.putFloat("night_high", nightHigh);
         editor.putInt("text_color", selectedColor);
         editor.putString("alarm_uri", selectedRingtoneUri);
+        editor.putInt("snooze_interval", snoozeInterval);
         editor.apply();
 
         Toast.makeText(this, getString(R.string.msg_saved), Toast.LENGTH_SHORT).show();

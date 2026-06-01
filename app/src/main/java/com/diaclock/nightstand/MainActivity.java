@@ -70,6 +70,16 @@ public class MainActivity extends AppCompatActivity {
     private MediaPlayer mediaPlayer = null;
     private boolean isAlarmSounding = false;
     private long alarmSnoozeUntilTime = 0; // Epoch milliseconds until which alarms are silenced
+    private static final long MAX_ALARM_DURATION_MS = 15 * 60 * 1000L; // 15 minutes
+    
+    private final Runnable autoSnoozeRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isAlarmSounding) {
+                snoozeAlarm(true);
+            }
+        }
+    };
 
     // Custom text color (default White)
     private int textColor = Color.WHITE;
@@ -184,12 +194,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void snoozeAlarm() {
+        snoozeAlarm(false);
+    }
+
+    private void snoozeAlarm(boolean isAuto) {
         stopAlarmSound();
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         int snoozeMin = prefs.getInt("snooze_interval", 60);
         // Silences alarms until epoch timestamp
         alarmSnoozeUntilTime = System.currentTimeMillis() + (snoozeMin * 60 * 1000L);
-        Toast.makeText(this, "Сигнал отложен на " + snoozeMin + " мин.", Toast.LENGTH_LONG).show();
+        String message = isAuto 
+            ? "Сигнал автоматически отложен на " + snoozeMin + " мин." 
+            : "Сигнал отложен на " + snoozeMin + " мин.";
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
     }
 
     private void updateAlarmBellIcon() {
@@ -443,6 +460,11 @@ public class MainActivity extends AppCompatActivity {
 
     // 5. Intelligent Multi-time Slot Alarms with Snooze & Auto-resets
     private void checkAlarms(double glucoseVal) {
+        if (!alarmEnabled) {
+            stopAlarmSound();
+            return;
+        }
+
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         
         // Load threshold ranges
@@ -466,12 +488,8 @@ public class MainActivity extends AppCompatActivity {
         boolean isSnoozed = System.currentTimeMillis() < alarmSnoozeUntilTime;
 
         if (isOutOfRange) {
-            if (alarmEnabled) {
-                if (!isSnoozed) {
-                    startAlarmSound();
-                } else {
-                    stopAlarmSound();
-                }
+            if (!isSnoozed) {
+                startAlarmSound();
             } else {
                 stopAlarmSound();
             }
@@ -508,6 +526,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startAlarmSound() {
+        if (!alarmEnabled) {
+            stopAlarmSound();
+            return;
+        }
+
         if (mediaPlayer == null) {
             try {
                 SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
@@ -535,6 +558,10 @@ public class MainActivity extends AppCompatActivity {
                 isAlarmSounding = true;
                 mediaPlayer.start();
                 
+                // Schedule auto-snooze
+                mainHandler.removeCallbacks(autoSnoozeRunnable);
+                mainHandler.postDelayed(autoSnoozeRunnable, MAX_ALARM_DURATION_MS);
+                
                 Toast.makeText(this, "Внимание! Сахар вышел из нормы! (Тапните для откладывания)", Toast.LENGTH_LONG).show();
             } catch (Exception e) {
                 Log.e(TAG, "Playing alarm sound failed: " + e.getMessage());
@@ -544,6 +571,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void stopAlarmSound() {
         isAlarmSounding = false;
+        mainHandler.removeCallbacks(autoSnoozeRunnable);
         if (mediaPlayer != null) {
             try {
                 if (mediaPlayer.isPlaying()) {
