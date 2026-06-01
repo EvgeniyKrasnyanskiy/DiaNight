@@ -63,6 +63,11 @@ public class SettingsActivity extends AppCompatActivity {
     private Button btnColorPurple;
     private Button btnColorYellow;
     private Button btnColorTeal;
+    private Button btnColorPink;
+    private Button btnColorMint;
+    private Button btnColorCoral;
+    private Button btnColorIndigo;
+    private Button btnColorLime;
 
     // Alarm Ringtone UI Elements
     private TextView tvRingtoneName;
@@ -76,6 +81,7 @@ public class SettingsActivity extends AppCompatActivity {
     private int selectedColor = Color.WHITE;
     private String selectedRingtoneUri = null;
     private MediaPlayer testMediaPlayer = null;
+    private java.util.concurrent.ExecutorService scanExecutor = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -123,6 +129,11 @@ public class SettingsActivity extends AppCompatActivity {
         btnColorPurple = findViewById(R.id.btnColorPurple);
         btnColorYellow = findViewById(R.id.btnColorYellow);
         btnColorTeal = findViewById(R.id.btnColorTeal);
+        btnColorPink = findViewById(R.id.btnColorPink);
+        btnColorMint = findViewById(R.id.btnColorMint);
+        btnColorCoral = findViewById(R.id.btnColorCoral);
+        btnColorIndigo = findViewById(R.id.btnColorIndigo);
+        btnColorLime = findViewById(R.id.btnColorLime);
 
         tvRingtoneName = findViewById(R.id.tvRingtoneName);
         btnChooseRingtone = findViewById(R.id.btnChooseRingtone);
@@ -195,6 +206,11 @@ public class SettingsActivity extends AppCompatActivity {
         btnColorPurple.setOnClickListener(v -> updateColor(Color.parseColor("#AF52DE")));
         btnColorYellow.setOnClickListener(v -> updateColor(Color.parseColor("#FFCC00")));
         btnColorTeal.setOnClickListener(v -> updateColor(Color.parseColor("#30B0C7")));
+        btnColorPink.setOnClickListener(v -> updateColor(Color.parseColor("#FF2D55")));
+        btnColorMint.setOnClickListener(v -> updateColor(Color.parseColor("#00C7BE")));
+        btnColorCoral.setOnClickListener(v -> updateColor(Color.parseColor("#FF7F50")));
+        btnColorIndigo.setOnClickListener(v -> updateColor(Color.parseColor("#5856D6")));
+        btnColorLime.setOnClickListener(v -> updateColor(Color.parseColor("#ACEC38")));
 
         btnColorCustom.setOnClickListener(v -> openColorPickerDialog());
 
@@ -554,67 +570,110 @@ public class SettingsActivity extends AppCompatActivity {
         final java.util.concurrent.atomic.AtomicBoolean found = new java.util.concurrent.atomic.AtomicBoolean(false);
         final java.util.concurrent.atomic.AtomicInteger finishedCount = new java.util.concurrent.atomic.AtomicInteger(0);
 
-        // Custom dispatcher to allow all 254 requests to execute in parallel immediately
-        okhttp3.Dispatcher dispatcher = new okhttp3.Dispatcher();
-        dispatcher.setMaxRequests(254);
-        dispatcher.setMaxRequestsPerHost(254);
+        // Cancel previous executor if running
+        if (scanExecutor != null) {
+            try {
+                scanExecutor.shutdownNow();
+            } catch (Exception e) {
+                // Ignore
+            }
+        }
 
-        OkHttpClient scanClient = new OkHttpClient.Builder()
-                .dispatcher(dispatcher)
-                .connectTimeout(2500, java.util.concurrent.TimeUnit.MILLISECONDS)
-                .readTimeout(2500, java.util.concurrent.TimeUnit.MILLISECONDS)
-                .build();
+        // Initialize high performance light-weight executor pool (28 parallel threads)
+        scanExecutor = java.util.concurrent.Executors.newFixedThreadPool(28);
 
         for (int i = 1; i <= 254; i++) {
             final String targetIp = subnetPrefix + i;
-            String url = "http://" + targetIp + ":17580/sgv.json?brief_mode=Y";
+            final java.util.concurrent.ExecutorService currentExecutor = scanExecutor;
 
-            Request request = new Request.Builder().url(url).build();
-            scanClient.newCall(request).enqueue(new Callback() {
+            scanExecutor.execute(new Runnable() {
                 @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    checkScanProgress(finishedCount, found, progressDialog);
-                }
-
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    final int code = response.code();
-                    android.util.Log.d("DiaNightScan", "Response from " + targetIp + ": code=" + code);
-                    
-                    // 200 OK or 401 Unauthorized mean the xDrip+ service is active at this IP!
-                    if (response.isSuccessful() || code == 401) {
-                        if (found.compareAndSet(false, true)) {
-                            // Cancel any remaining queued requests to free up resources
-                            scanClient.dispatcher().cancelAll();
-                            
-                            runOnUiThread(() -> {
-                                etIpAddress.setText(targetIp);
-                                progressDialog.dismiss();
-                                if (code == 401) {
-                                    Toast.makeText(SettingsActivity.this, "xDrip+ найден! IP: " + targetIp + "\nНо требуется авторизация. Пожалуйста, проверьте API Secret!", Toast.LENGTH_LONG).show();
-                                    new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                                            .setTitle("xDrip+ найден!")
-                                            .setMessage("Мастер-устройство успешно обнаружено на IP: " + targetIp + ".\n\nОднако на нём включена защита. Убедитесь, что вы ввели правильный «Секретный ключ веб-службы (API Secret)» ниже, иначе данные не будут поступать.")
-                                            .setPositiveButton("ОК", null)
-                                            .show();
-                                } else {
-                                    Toast.makeText(SettingsActivity.this, "xDrip+ успешно найден! IP: " + targetIp, Toast.LENGTH_LONG).show();
-                                }
-                            });
-                        }
+                public void run() {
+                    if (found.get() || Thread.currentThread().isInterrupted()) {
+                        checkScanProgress(finishedCount, found, progressDialog, currentExecutor);
+                        return;
                     }
-                    response.close();
-                    checkScanProgress(finishedCount, found, progressDialog);
+
+                    boolean portOpen = false;
+                    try (java.net.Socket socket = new java.net.Socket()) {
+                        // Quick TCP-handshake ping on port 17580 with 1.0s timeout
+                        socket.connect(new java.net.InetSocketAddress(targetIp, 17580), 1000);
+                        portOpen = true;
+                        android.util.Log.d("DiaNightScan", "TCP port 17580 is OPEN on candidate IP: " + targetIp);
+                    } catch (java.io.IOException e) {
+                        // Port is closed or host is not reachable
+                    }
+
+                    if (portOpen && !found.get()) {
+                        // Candidate found, perform single target HTTP-validation to confirm xDrip+
+                        verifyXdripAndSelect(targetIp, found, progressDialog, finishedCount, currentExecutor);
+                    } else {
+                        checkScanProgress(finishedCount, found, progressDialog, currentExecutor);
+                    }
                 }
             });
         }
     }
 
+    private void verifyXdripAndSelect(final String targetIp, 
+                                       final java.util.concurrent.atomic.AtomicBoolean found, 
+                                       final ProgressDialog progressDialog,
+                                       final java.util.concurrent.atomic.AtomicInteger finishedCount,
+                                       final java.util.concurrent.ExecutorService executor) {
+        String url = "http://" + targetIp + ":17580/sgv.json?brief_mode=Y";
+        
+        OkHttpClient singleClient = new OkHttpClient.Builder()
+                .connectTimeout(1500, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .readTimeout(1500, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .build();
+
+        Request request = new Request.Builder().url(url).build();
+        singleClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                android.util.Log.d("DiaNightScan", "HTTP verification failed for IP " + targetIp + ": " + e.getMessage());
+                checkScanProgress(finishedCount, found, progressDialog, executor);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                final int code = response.code();
+                android.util.Log.d("DiaNightScan", "HTTP verification response from " + targetIp + ": code=" + code);
+                response.close();
+
+                // 200 OK or 401 Unauthorized strongly proves it's indeed xDrip+ server!
+                if ((code == 200 || code == 401) && found.compareAndSet(false, true)) {
+                    // Instantly shutdown the executor to free up system threads
+                    executor.shutdownNow();
+
+                    runOnUiThread(() -> {
+                        etIpAddress.setText(targetIp);
+                        progressDialog.dismiss();
+                        if (code == 401) {
+                            Toast.makeText(SettingsActivity.this, "xDrip+ найден! IP: " + targetIp + "\nНо требуется авторизация. Пожалуйста, проверьте API Secret!", Toast.LENGTH_LONG).show();
+                            new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                    .setTitle("xDrip+ найден!")
+                                    .setMessage("Мастер-устройство успешно обнаружено на IP: " + targetIp + ".\n\nОднако на нём включена защита. Убедитесь, что вы ввели правильный «Секретный ключ веб-службы (API Secret)» ниже, иначе данные не будут поступать.")
+                                    .setPositiveButton("ОК", null)
+                                    .show();
+                        } else {
+                            Toast.makeText(SettingsActivity.this, "xDrip+ успешно найден! IP: " + targetIp, Toast.LENGTH_LONG).show();
+                        }
+                    });
+                } else {
+                    checkScanProgress(finishedCount, found, progressDialog, executor);
+                }
+            }
+        });
+    }
+
     private void checkScanProgress(java.util.concurrent.atomic.AtomicInteger finishedCount, 
                                    java.util.concurrent.atomic.AtomicBoolean found, 
-                                   ProgressDialog progressDialog) {
+                                   ProgressDialog progressDialog,
+                                   java.util.concurrent.ExecutorService executor) {
         int current = finishedCount.incrementAndGet();
         if (current >= 254 && !found.get()) {
+            executor.shutdown();
             runOnUiThread(() -> {
                 progressDialog.dismiss();
                 Toast.makeText(SettingsActivity.this, "xDrip+ не найден в вашей Wi-Fi сети. Убедитесь, что веб-служба включена в xDrip+.", Toast.LENGTH_LONG).show();
@@ -744,5 +803,12 @@ public class SettingsActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         stopTestAlarm();
+        if (scanExecutor != null) {
+            try {
+                scanExecutor.shutdownNow();
+            } catch (Exception e) {
+                // Ignore
+            }
+        }
     }
 }

@@ -193,131 +193,188 @@
                     android:textSize="16sp"
                     android:layout_marginBottom="12dp"/>
 
-                <!-- Row 1 of colors -->
+                <!-- Scrollable row of 15 preset colors -->
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:scrollbars="none"
+                    android:layout_marginBottom="12dp">
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <!-- White -->
+                        <Button
+                            android:id="@+id/btnColorWhite"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:backgroundTint="#FFFFFF"
+                            style="@style/Widget.MaterialComponents.Button"
+                            android:layout_marginEnd="8dp"
+                            android:padding="0dp"/>
+                        
+                        <!-- Grey -->
+                        <Button
+                            android:id="@+id/btnColorGrey"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:backgroundTint="#8E8E93"
+                            style="@style/Widget.MaterialComponents.Button"
+                            android:layout_marginEnd="8dp"
+                            android:padding="0dp"/>
+
+                        <!-- Dark Grey -->
+                        <Button
+                            android:id="@+id/btnColorDarkGrey"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:backgroundTint="#3A3A3C"
+                            style="@style/Widget.MaterialComponents.Button"
+                            android:layout_marginEnd="8dp"
+                            android:padding="0dp"/>
+
+                        <!-- Green -->
+                        <Button
+                            android:id="@+id/btnColorGreen"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:backgroundTint="#34C759"
+                            style="@style/Widget.MaterialComponents.Button"
+                            android:layout_marginEnd="8dp"
+                            android:padding="0dp"/>
+
+                        <!-- Blue -->
+                        <Button
+                            android:id="@+id/btnColorBlue"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:backgroundTint="#007AFF"
+                            style="@style/Widget.MaterialComponents.Button"
+                            android:layout_marginEnd="8dp"
+                            android:padding="0dp"/>
+
+                        <!-- Amber / Orange -->
+                        <Button
+                            android:id="@+id/btnColorOrange"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:backgroundTint="#FF9500"
+                            style="@style/Widget.MaterialComponents.Button"
+                            android:layout_marginEnd="8dp"
+                            android:padding="0dp"/>
+
+                        <!-- Soft Red -->
+                        <Button
+                            android:id="@+id/btnColorRed"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:backgroundTint="#FF3B30"
+                            style="@style/Widget.MaterialComponents.Button"
+                            android:layout_marginEnd="8dp"
+                            android:padding="0dp"/>
+
+                        <!-- Purple -->
+                        <Button
+                            android:id="@+id/btnColorPurple"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:backgroundTint="#AF52DE"
+                            style="@style/Widget.MaterialComponents.Button"
+                            android:layout_marginEnd="8dp"
+                            android:padding="0dp"/>
+
+                        <!-- Yellow / Gold -->
+                        <Button
+                            android:id="@+id/btnColorYellow"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:backgroundTint="#FFCC00"
+                            style="@style/Widget.MaterialComponents.Button"
+                            android:layout_marginEnd="8dp"
+                            android:padding="0dp"/>
+
+                        <!-- Teal -->
+                        <Button
+                            android:id="@+id/btnColorTeal"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:backgroundTint="#30B0C7"
+                            style="@style/Widget.MaterialComponents.Button"
+                            android:layout_marginEnd="8dp"
+                            android:padding="0dp"/>
+
+                        <!-- Pink (NEW) -->
+                        <Button
+                            android:id="@+id/btnColorPink"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:backgroundTint="#FF2D55"
+                            style="@style/Widget.MaterialComponents.Button"
+                            android:layout_marginEnd="8dp"
+                            android:padding="0dp"/>
+
+                        <!-- Mint (NEW) -->
+                        <Button
+                            android:id="@+id/btnColorMint"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:backgroundTint="#00C7BE"
+                            style="@style/Widget.MaterialComponents.Button"
+                            android:layout_marginEnd="8dp"
+                            android:padding="0dp"/>
+
+                        <!-- Coral (NEW) -->
+                        <Button
+                            android:id="@+id/btnColorCoral"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:backgroundTint="#FF7F50"
+                            style="@style/Widget.MaterialComponents.Button"
+                            android:layout_marginEnd="8dp"
+                            android:padding="0dp"/>
+
+                        <!-- Indigo (NEW) -->
+                        <Button
+                            android:id="@+id/btnColorIndigo"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:backgroundTint="#5856D6"
+                            style="@style/Widget.MaterialComponents.Button"
+                            android:layout_marginEnd="8dp"
+                            android:padding="0dp"/>
+
+                        <!-- Lime (NEW) -->
+                        <Button
+                            android:id="@+id/btnColorLime"
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:backgroundTint="#ACEC38"
+                            style="@style/Widget.MaterialComponents.Button"
+                            android:padding="0dp"/>
+
+                    </LinearLayout>
+                </HorizontalScrollView>
+
+                <!-- Custom Color Action Row (Aligned to right for unified interface) -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:layout_marginBottom="8dp">
+                    android:gravity="end|center_vertical"
+                    android:layout_marginTop="4dp">
 
-                    <!-- White -->
-                    <Button
-                        android:id="@+id/btnColorWhite"
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
-                        android:backgroundTint="#FFFFFF"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_marginEnd="6dp"
-                        android:padding="0dp"/>
-                    
-                    <!-- Grey -->
-                    <Button
-                        android:id="@+id/btnColorGrey"
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
-                        android:backgroundTint="#8E8E93"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_marginEnd="6dp"
-                        android:padding="0dp"/>
-
-                    <!-- Dark Grey -->
-                    <Button
-                        android:id="@+id/btnColorDarkGrey"
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
-                        android:backgroundTint="#3A3A3C"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_marginEnd="6dp"
-                        android:padding="0dp"/>
-
-                    <!-- Green -->
-                    <Button
-                        android:id="@+id/btnColorGreen"
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
-                        android:backgroundTint="#34C759"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_marginEnd="6dp"
-                        android:padding="0dp"/>
-
-                    <!-- Blue -->
-                    <Button
-                        android:id="@+id/btnColorBlue"
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
-                        android:backgroundTint="#007AFF"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_marginEnd="6dp"
-                        android:padding="0dp"/>
-
-                </LinearLayout>
-
-                <!-- Row 2 of colors -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
-
-                    <!-- Amber / Orange -->
-                    <Button
-                        android:id="@+id/btnColorOrange"
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
-                        android:backgroundTint="#FF9500"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_marginEnd="6dp"
-                        android:padding="0dp"/>
-
-                    <!-- Soft Red -->
-                    <Button
-                        android:id="@+id/btnColorRed"
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
-                        android:backgroundTint="#FF3B30"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_marginEnd="6dp"
-                        android:padding="0dp"/>
-
-                    <!-- Purple -->
-                    <Button
-                        android:id="@+id/btnColorPurple"
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
-                        android:backgroundTint="#AF52DE"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_marginEnd="6dp"
-                        android:padding="0dp"/>
-
-                    <!-- Yellow / Gold -->
-                    <Button
-                        android:id="@+id/btnColorYellow"
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
-                        android:backgroundTint="#FFCC00"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_marginEnd="6dp"
-                        android:padding="0dp"/>
-
-                    <!-- Teal -->
-                    <Button
-                        android:id="@+id/btnColorTeal"
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
-                        android:backgroundTint="#30B0C7"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_marginEnd="12dp"
-                        android:padding="0dp"/>
-
-                    <!-- Divider -->
+                    <!-- Color Preview View (Placed to the left of Custom Button) -->
                     <View
-                        android:layout_width="1dp"
-                        android:layout_height="24dp"
-                        android:background="@color/color_disabled_grey"
-                        android:layout_marginEnd="12dp"/>
+                        android:id="@+id/viewColorPreview"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:layout_marginEnd="12dp"
+                        android:background="#FFFFFF"/>
 
-                    <!-- Custom Color Button -->
+                    <!-- Custom Color Button (Aligned right) -->
                     <Button
                         android:id="@+id/btnColorCustom"
                         android:layout_width="wrap_content"
@@ -327,20 +384,13 @@
                         android:textColor="@color/black"
                         android:backgroundTint="@color/colorPrimary"
                         style="@style/Widget.MaterialComponents.Button"
-                        android:layout_marginEnd="12dp"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
                         android:paddingStart="12dp"
                         android:paddingEnd="12dp"/>
 
-                    <!-- Color Preview View -->
-                    <View
-                        android:id="@+id/viewColorPreview"
-                        android:layout_width="28dp"
-                        android:layout_height="28dp"
-                        android:background="#FFFFFF"/>
-
                 </LinearLayout>
+
 
             </LinearLayout>
         </androidx.cardview.widget.CardView>
