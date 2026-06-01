@@ -47,7 +47,7 @@
                     android:textSize="16sp"
                     android:layout_marginBottom="12dp"/>
 
-                <!-- IP Address Row with AutoSearch and Help Icons -->
+                <!-- IP Address Row with Help Icon -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -73,20 +73,6 @@
                             android:singleLine="true"/>
                     </com.google.android.material.textfield.TextInputLayout>
 
-                    <!-- Auto Search Button -->
-                    <ImageView
-                        android:id="@+id/ivAutoSearch"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:src="@drawable/ic_search"
-                        android:contentDescription="Auto Search Master IP"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:padding="10dp"
-                        android:layout_marginStart="8dp"
-                        app:tint="@color/colorPrimary"/>
-
                     <!-- Help Manual Button -->
                     <ImageView
                         android:id="@+id/ivHelp"
@@ -98,7 +84,7 @@
                         android:focusable="true"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:padding="10dp"
-                        android:layout_marginStart="4dp"
+                        android:layout_marginStart="8dp"
                         app:tint="@color/colorPrimary"/>
 
                 </LinearLayout>
@@ -139,6 +125,46 @@
                         android:textColor="@color/text_primary"
                         android:singleLine="true"/>
                 </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- Actions row for Test & AutoSearch -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="16dp"
+                    android:gravity="end">
+
+                    <!-- Test Connection Button -->
+                    <Button
+                        android:id="@+id/btnTestConnection"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Проверить связь"
+                        android:textSize="12sp"
+                        android:textColor="@color/text_primary"
+                        android:backgroundTint="@color/bg_input"
+                        style="@style/Widget.MaterialComponents.Button"
+                        android:layout_marginEnd="8dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"/>
+
+                    <!-- Auto Search Button -->
+                    <Button
+                        android:id="@+id/btnAutoSearchBeta"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Автопоиск (Beta)"
+                        android:textSize="12sp"
+                        android:textColor="@color/black"
+                        android:backgroundTint="@color/colorPrimary"
+                        style="@style/Widget.MaterialComponents.Button"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"/>
+                </LinearLayout>
 
             </LinearLayout>
         </androidx.cardview.widget.CardView>

@@ -47,7 +47,8 @@ public class SettingsActivity extends AppCompatActivity {
     private TextInputEditText etNightHigh;
     private TextInputEditText etSnoozeInterval;
     
-    private ImageView ivAutoSearch;
+    private Button btnTestConnection;
+    private Button btnAutoSearchBeta;
     private ImageView ivHelp;
 
     private View viewColorPreview;
@@ -101,7 +102,8 @@ public class SettingsActivity extends AppCompatActivity {
         etNightHigh = findViewById(R.id.etNightHigh);
         etSnoozeInterval = findViewById(R.id.etSnoozeInterval);
         
-        ivAutoSearch = findViewById(R.id.ivAutoSearch);
+        btnTestConnection = findViewById(R.id.btnTestConnection);
+        btnAutoSearchBeta = findViewById(R.id.btnAutoSearchBeta);
         ivHelp = findViewById(R.id.ivHelp);
 
         viewColorPreview = findViewById(R.id.viewColorPreview);
@@ -169,7 +171,8 @@ public class SettingsActivity extends AppCompatActivity {
         btnSave.setOnClickListener(v -> saveSettings());
         
         ivHelp.setOnClickListener(v -> showHelpDialog());
-        ivAutoSearch.setOnClickListener(v -> startNetworkAutoDiscovery());
+        btnTestConnection.setOnClickListener(v -> testConnection());
+        btnAutoSearchBeta.setOnClickListener(v -> startNetworkAutoDiscovery());
 
         // Preset Colors
         btnColorWhite.setOnClickListener(v -> updateColor(Color.WHITE));
@@ -608,9 +611,10 @@ public class SettingsActivity extends AppCompatActivity {
                 "   • В поле «Секретный ключ веб-службы» (API Secret) задайте или скопируйте ключ (минимум 12 символов).\n\n" +
                 "2. Настройка смартфона DiaNight:\n" +
                 "   • Подключите оба устройства к одной Wi-Fi сети.\n" +
-                "   • Нажмите на иконку «Лупа» (автопоиск) рядом с полем ввода IP для автоматического нахождения мастера.\n" +
+                "   • Нажмите кнопку «Автопоиск (Beta)» под настройками для автоматического нахождения мастера.\n" +
                 "   • Если автопоиск не сработал, введите IP-адрес мастера вручную.\n" +
                 "   • Введите API Secret точно такой же, как в xDrip+.\n" +
+                "   • Для быстрой проверки нажмите кнопку «Проверить связь».\n" +
                 "   • Нажмите «Сохранить».\n\n" +
                 "3. Оптимизация батареи (ВАЖНО!):\n" +
                 "   • В настройках Android обоих смартфонов отключите оптимизацию батареи для xDrip+ и DiaNight, чтобы система не закрывала их ночью.";
@@ -620,6 +624,100 @@ public class SettingsActivity extends AppCompatActivity {
                 .setMessage(helpText)
                 .setPositiveButton("Понятно", null)
                 .show();
+    }
+
+    /**
+     * Performs a fast connection check with the currently typed IP and API Secret.
+     */
+    private void testConnection() {
+        final String ip = etIpAddress.getText() != null ? etIpAddress.getText().toString().trim() : "";
+        final String secret = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
+        
+        if (ip.isEmpty()) {
+            Toast.makeText(this, "Пожалуйста, введите IP-адрес для проверки", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        final ProgressDialog progressDialog = new ProgressDialog(this);
+        progressDialog.setTitle("Проверка связи");
+        progressDialog.setMessage("Подключение к xDrip+ по адресу " + ip + "...");
+        progressDialog.setCancelable(false);
+        progressDialog.show();
+
+        String url = "http://" + ip + ":17580/sgv.json?brief_mode=Y";
+        
+        okhttp3.Request.Builder requestBuilder = new okhttp3.Request.Builder().url(url);
+        if (!secret.isEmpty()) {
+            String hashedSecret = computeSHA1(secret);
+            requestBuilder.addHeader("api-secret", hashedSecret);
+        }
+        okhttp3.Request request = requestBuilder.build();
+
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                .build();
+
+        client.newCall(request).enqueue(new okhttp3.Callback() {
+            @Override
+            public void onFailure(@NonNull okhttp3.Call call, @NonNull IOException e) {
+                runOnUiThread(() -> {
+                    progressDialog.dismiss();
+                    new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                            .setTitle("Ошибка связи ❌")
+                            .setMessage("Не удалось подключиться к xDrip+ по адресу:\n" + ip + "\n\nДетали ошибки:\n" + e.getMessage() + "\n\nУбедитесь, что:\n1. Оба телефона подключены к одной Wi-Fi сети.\n2. На мастере в настройках xDrip+ включен «Локальный веб-сервер» в Inter-app settings.")
+                            .setPositiveButton("ОК", null)
+                            .show();
+                });
+            }
+
+            @Override
+            public void onResponse(@NonNull okhttp3.Call call, @NonNull okhttp3.Response response) throws IOException {
+                final int code = response.code();
+                final String responseBody = response.body() != null ? response.body().string() : "";
+                response.close();
+
+                runOnUiThread(() -> {
+                    progressDialog.dismiss();
+                    if (code == 200) {
+                        new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                .setTitle("Успешно! ✅")
+                                .setMessage("Связь с xDrip+ успешно установлена!\n\nКод ответа: 200 OK\nУстройство найдено, данные читаются корректно.")
+                                .setPositiveButton("Отлично", null)
+                                .show();
+                    } else if (code == 401) {
+                        new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                .setTitle("Требуется авторизация ⚠️")
+                                .setMessage("Связь с xDrip+ установлена (устройство найдено), но сервер отклонил запрос с кодом 401 (Unauthorized).\n\nПожалуйста, убедитесь, что вы правильно ввели «Секретный ключ веб-службы (API Secret)»!")
+                                .setPositiveButton("ОК", null)
+                                .show();
+                    } else {
+                        new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                .setTitle("Необычный ответ ℹ️")
+                                .setMessage("Подключение удалось, но сервер xDrip+ вернул код: " + code + ".\n\nОтвет сервера:\n" + responseBody)
+                                .setPositiveButton("ОК", null)
+                                .show();
+                    }
+                });
+            }
+        });
+    }
+
+    private String computeSHA1(String input) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-1");
+            byte[] messageDigest = md.digest(input.getBytes("UTF-8"));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : messageDigest) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (Exception e) {
+            android.util.Log.e("DiaNightScan", "SHA-1 hashing failed: " + e.getMessage());
+            return input;
+        }
     }
 
     @Override

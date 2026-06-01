@@ -245,6 +245,12 @@ public class MainActivity extends AppCompatActivity {
             startActivity(intent);
         });
 
+        // Open Settings screen from the network warning icon (exclamation mark) as requested
+        ivNetworkWarning.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
+            startActivity(intent);
+        });
+
         // Enable clickability on the root layout to catch alarm dismiss taps anywhere on the screen
         mainRootLayout.setClickable(true);
         mainRootLayout.setFocusable(true);

@@ -36,6 +36,38 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"/>
 
+        <!-- Battery Status Container (Top-Right, left of network warning/alarm bell) -->
+        <LinearLayout
+            android:id="@+id/ivBatteryContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="8dp"
+            android:layout_marginEnd="4dp"
+            app:layout_constraintEnd_toStartOf="@id/ivNetworkWarning"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent">
+
+            <ImageView
+                android:id="@+id/ivBatteryIcon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_battery"
+                android:contentDescription="Battery Status"
+                android:layout_marginEnd="4dp"/>
+
+            <TextView
+                android:id="@+id/tvBatteryPercent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="100%"
+                android:textSize="18sp"
+                android:textColor="@color/white"
+                android:textStyle="bold"/>
+
+        </LinearLayout>
+
         <!-- Network Warning Icon (Top-Right, next to alarm bell) -->
         <ImageView
             android:id="@+id/ivNetworkWarning"
@@ -44,6 +76,9 @@
             android:src="@drawable/ic_warning"
             android:contentDescription="Connection Warning"
             android:visibility="gone"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackgroundBorderless"
             android:padding="10dp"
             app:layout_constraintEnd_toStartOf="@id/ivAlarmBell"
             app:layout_constraintTop_toTopOf="parent"
@@ -175,34 +210,6 @@
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- Battery Status Container (Bottom-Right) -->
-    <LinearLayout
-        android:id="@+id/ivBatteryContainer"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:padding="16dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
 
-        <ImageView
-            android:id="@+id/ivBatteryIcon"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:src="@drawable/ic_battery"
-            android:contentDescription="Battery Status"
-            android:layout_marginEnd="4dp"/>
-
-        <TextView
-            android:id="@+id/tvBatteryPercent"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="100%"
-            android:textSize="18sp"
-            android:textColor="@color/white"
-            android:textStyle="bold"/>
-
-    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
