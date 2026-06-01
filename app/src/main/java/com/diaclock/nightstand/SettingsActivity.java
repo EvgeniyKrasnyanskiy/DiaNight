@@ -63,11 +63,6 @@ public class SettingsActivity extends AppCompatActivity {
     private Button btnColorPurple;
     private Button btnColorYellow;
     private Button btnColorTeal;
-    private Button btnColorPink;
-    private Button btnColorMint;
-    private Button btnColorCoral;
-    private Button btnColorIndigo;
-    private Button btnColorLime;
 
     // Alarm Ringtone UI Elements
     private TextView tvRingtoneName;
@@ -129,11 +124,6 @@ public class SettingsActivity extends AppCompatActivity {
         btnColorPurple = findViewById(R.id.btnColorPurple);
         btnColorYellow = findViewById(R.id.btnColorYellow);
         btnColorTeal = findViewById(R.id.btnColorTeal);
-        btnColorPink = findViewById(R.id.btnColorPink);
-        btnColorMint = findViewById(R.id.btnColorMint);
-        btnColorCoral = findViewById(R.id.btnColorCoral);
-        btnColorIndigo = findViewById(R.id.btnColorIndigo);
-        btnColorLime = findViewById(R.id.btnColorLime);
 
         tvRingtoneName = findViewById(R.id.tvRingtoneName);
         btnChooseRingtone = findViewById(R.id.btnChooseRingtone);
@@ -206,11 +196,6 @@ public class SettingsActivity extends AppCompatActivity {
         btnColorPurple.setOnClickListener(v -> updateColor(Color.parseColor("#AF52DE")));
         btnColorYellow.setOnClickListener(v -> updateColor(Color.parseColor("#FFCC00")));
         btnColorTeal.setOnClickListener(v -> updateColor(Color.parseColor("#30B0C7")));
-        btnColorPink.setOnClickListener(v -> updateColor(Color.parseColor("#FF2D55")));
-        btnColorMint.setOnClickListener(v -> updateColor(Color.parseColor("#00C7BE")));
-        btnColorCoral.setOnClickListener(v -> updateColor(Color.parseColor("#FF7F50")));
-        btnColorIndigo.setOnClickListener(v -> updateColor(Color.parseColor("#5856D6")));
-        btnColorLime.setOnClickListener(v -> updateColor(Color.parseColor("#ACEC38")));
 
         btnColorCustom.setOnClickListener(v -> openColorPickerDialog());
 
@@ -627,7 +612,15 @@ public class SettingsActivity extends AppCompatActivity {
                 .readTimeout(1500, java.util.concurrent.TimeUnit.MILLISECONDS)
                 .build();
 
-        Request request = new Request.Builder().url(url).build();
+        final String secret = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
+        okhttp3.Request.Builder requestBuilder = new okhttp3.Request.Builder().url(url);
+        if (!secret.isEmpty()) {
+            String hashedSecret = computeSHA1(secret);
+            requestBuilder.addHeader("api-secret", hashedSecret);
+            android.util.Log.d("DiaNightScan", "Verifying IP " + targetIp + " with SHA-1 hashed api-secret header");
+        }
+
+        Request request = requestBuilder.build();
         singleClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
