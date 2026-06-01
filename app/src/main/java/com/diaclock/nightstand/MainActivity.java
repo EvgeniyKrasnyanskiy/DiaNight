@@ -398,7 +398,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 fetchGlucoseData();
-                mainHandler.postDelayed(this, 60000L); // Pull every 60s
+                mainHandler.postDelayed(this, 10000L); // Pull every 10s
             }
         };
         mainHandler.post(networkRunnable);
@@ -443,6 +443,7 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     showNetworkWarning(true);
                     tvGlucose.setText("---");
+                    tvIoB.setVisibility(View.GONE);
                     applyTextColor();
                 });
             }
@@ -453,6 +454,7 @@ public class MainActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         showNetworkWarning(true);
                         tvGlucose.setText("---");
+                        tvIoB.setVisibility(View.GONE);
                         applyTextColor();
                     });
                     return;
@@ -463,19 +465,28 @@ public class MainActivity extends AppCompatActivity {
                     JsonElement element = JsonParser.parseString(responseBody);
                     int sgv = 0;
                     String direction = "";
+                    double iob = -1.0;
                     
                     if (element.isJsonArray()) {
                         JsonArray array = element.getAsJsonArray();
                         if (array.size() > 0) {
-                            sgv = array.get(0).getAsJsonObject().get("sgv").getAsInt();
-                            if (array.get(0).getAsJsonObject().has("direction")) {
-                                direction = array.get(0).getAsJsonObject().get("direction").getAsString();
+                            com.google.gson.JsonObject obj = array.get(0).getAsJsonObject();
+                            sgv = obj.get("sgv").getAsInt();
+                            if (obj.has("direction")) {
+                                direction = obj.get("direction").getAsString();
+                            }
+                            if (obj.has("iob")) {
+                                iob = obj.get("iob").getAsDouble();
                             }
                         }
                     } else if (element.isJsonObject()) {
-                        sgv = element.getAsJsonObject().get("sgv").getAsInt();
-                        if (element.getAsJsonObject().has("direction")) {
-                            direction = element.getAsJsonObject().get("direction").getAsString();
+                        com.google.gson.JsonObject obj = element.getAsJsonObject();
+                        sgv = obj.get("sgv").getAsInt();
+                        if (obj.has("direction")) {
+                            direction = obj.get("direction").getAsString();
+                        }
+                        if (obj.has("iob")) {
+                            iob = obj.get("iob").getAsDouble();
                         }
                     }
 
@@ -484,11 +495,21 @@ public class MainActivity extends AppCompatActivity {
                         lastGlucoseMmol = glucoseMmol;
                         final String finalDirection = direction;
                         lastDirection = direction;
+                        final double finalIob = iob;
                         
                         runOnUiThread(() -> {
                             showNetworkWarning(false);
                             // Append the Unicode trend arrow directly onto tvGlucose text
                             tvGlucose.setText(String.format(Locale.US, "%.1f %s", glucoseMmol, getTrendArrow(finalDirection)));
+                            
+                            // Display IoB if present
+                            if (finalIob >= 0) {
+                                tvIoB.setText(String.format(Locale.US, "%.2f U", finalIob));
+                                tvIoB.setVisibility(View.VISIBLE);
+                            } else {
+                                tvIoB.setVisibility(View.GONE);
+                            }
+                            
                             applyTextColor();
                             checkAlarms(glucoseMmol);
                         });
@@ -496,6 +517,7 @@ public class MainActivity extends AppCompatActivity {
                         runOnUiThread(() -> {
                             showNetworkWarning(true);
                             tvGlucose.setText("---");
+                            tvIoB.setVisibility(View.GONE);
                             applyTextColor();
                         });
                     }
@@ -504,6 +526,7 @@ public class MainActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         showNetworkWarning(true);
                         tvGlucose.setText("---");
+                        tvIoB.setVisibility(View.GONE);
                         applyTextColor();
                     });
                 }
