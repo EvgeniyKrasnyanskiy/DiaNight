@@ -58,6 +58,11 @@ public class SettingsActivity extends AppCompatActivity {
     private Button btnColorGreen;
     private Button btnColorBlue;
     private Button btnColorCustom;
+    private Button btnColorOrange;
+    private Button btnColorRed;
+    private Button btnColorPurple;
+    private Button btnColorYellow;
+    private Button btnColorTeal;
 
     // Alarm Ringtone UI Elements
     private TextView tvRingtoneName;
@@ -113,6 +118,11 @@ public class SettingsActivity extends AppCompatActivity {
         btnColorGreen = findViewById(R.id.btnColorGreen);
         btnColorBlue = findViewById(R.id.btnColorBlue);
         btnColorCustom = findViewById(R.id.btnColorCustom);
+        btnColorOrange = findViewById(R.id.btnColorOrange);
+        btnColorRed = findViewById(R.id.btnColorRed);
+        btnColorPurple = findViewById(R.id.btnColorPurple);
+        btnColorYellow = findViewById(R.id.btnColorYellow);
+        btnColorTeal = findViewById(R.id.btnColorTeal);
 
         tvRingtoneName = findViewById(R.id.tvRingtoneName);
         btnChooseRingtone = findViewById(R.id.btnChooseRingtone);
@@ -180,6 +190,11 @@ public class SettingsActivity extends AppCompatActivity {
         btnColorDarkGrey.setOnClickListener(v -> updateColor(Color.parseColor("#3A3A3C")));
         btnColorGreen.setOnClickListener(v -> updateColor(Color.parseColor("#34C759")));
         btnColorBlue.setOnClickListener(v -> updateColor(Color.parseColor("#007AFF")));
+        btnColorOrange.setOnClickListener(v -> updateColor(Color.parseColor("#FF9500")));
+        btnColorRed.setOnClickListener(v -> updateColor(Color.parseColor("#FF3B30")));
+        btnColorPurple.setOnClickListener(v -> updateColor(Color.parseColor("#AF52DE")));
+        btnColorYellow.setOnClickListener(v -> updateColor(Color.parseColor("#FFCC00")));
+        btnColorTeal.setOnClickListener(v -> updateColor(Color.parseColor("#30B0C7")));
 
         btnColorCustom.setOnClickListener(v -> openColorPickerDialog());
 
@@ -502,28 +517,33 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void startNetworkAutoDiscovery() {
-        String ip = getLocalIpAddress();
-        android.util.Log.d("DiaNightScan", "Detected device IP: " + ip);
+        String basePrefix = "";
         
-        String basePrefix = "192.168.1.";
-        if (ip != null && ip.contains(".") && !ip.equals("0.0.0.0") && !ip.equals("127.0.0.1")) {
-            int lastDot = ip.lastIndexOf('.');
-            basePrefix = ip.substring(0, lastDot + 1);
+        // 1. Preferential Subnet: Extract from the current IP field if available
+        String fieldIp = etIpAddress.getText() != null ? etIpAddress.getText().toString().trim() : "";
+        if (fieldIp.contains(".") && !fieldIp.isEmpty()) {
+            int lastDot = fieldIp.lastIndexOf('.');
+            basePrefix = fieldIp.substring(0, lastDot + 1);
+            android.util.Log.d("DiaNightScan", "Using preferential subnet prefix from IP field: " + basePrefix);
         }
         
-        // Fallback: if auto-detection gave us the default, try to extract prefix from the current IP field
-        if (basePrefix.equals("192.168.1.")) {
-            String fieldIp = etIpAddress.getText() != null ? etIpAddress.getText().toString().trim() : "";
-            if (fieldIp.contains(".") && !fieldIp.isEmpty()) {
-                int lastDot = fieldIp.lastIndexOf('.');
-                String fieldPrefix = fieldIp.substring(0, lastDot + 1);
-                android.util.Log.d("DiaNightScan", "Using fallback prefix from IP field: " + fieldPrefix);
-                basePrefix = fieldPrefix;
+        // 2. Backup Subnet: Auto-detect device IP if field was empty or invalid
+        if (basePrefix.isEmpty()) {
+            String ip = getLocalIpAddress();
+            android.util.Log.d("DiaNightScan", "Detected device IP for scan backup: " + ip);
+            if (ip != null && ip.contains(".") && !ip.equals("0.0.0.0") && !ip.equals("127.0.0.1")) {
+                int lastDot = ip.lastIndexOf('.');
+                basePrefix = ip.substring(0, lastDot + 1);
             }
+        }
+        
+        // 3. Ultimate Fallback
+        if (basePrefix.isEmpty()) {
+            basePrefix = "192.168.1.";
         }
 
         final String subnetPrefix = basePrefix;
-        android.util.Log.d("DiaNightScan", "Using subnet prefix for scanning: " + subnetPrefix);
+        android.util.Log.d("DiaNightScan", "Final scanning subnet prefix: " + subnetPrefix);
 
         final ProgressDialog progressDialog = new ProgressDialog(this);
         progressDialog.setTitle("Автопоиск мастера");
@@ -541,8 +561,8 @@ public class SettingsActivity extends AppCompatActivity {
 
         OkHttpClient scanClient = new OkHttpClient.Builder()
                 .dispatcher(dispatcher)
-                .connectTimeout(1500, java.util.concurrent.TimeUnit.MILLISECONDS)
-                .readTimeout(1500, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .connectTimeout(2500, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .readTimeout(2500, java.util.concurrent.TimeUnit.MILLISECONDS)
                 .build();
 
         for (int i = 1; i <= 254; i++) {
