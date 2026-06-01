@@ -154,6 +154,7 @@ public class MainActivity extends AppCompatActivity {
         pixelShiftHandler.post(pixelShiftRunnable);
         
         // Initial inactivity trigger
+        adjustTextSizes();
         resetUserInactivityTimer();
     }
 
@@ -166,6 +167,7 @@ public class MainActivity extends AppCompatActivity {
         applyTextColor();
         
         // Refresh inactivity timer on resume
+        adjustTextSizes();
         resetUserInactivityTimer();
     }
 
@@ -827,6 +829,41 @@ public class MainActivity extends AppCompatActivity {
         // Task 7: Hide the alarm bell icon only if alarms are disabled
         if (!alarmEnabled) {
             ivAlarmBell.animate().alpha(0.0f).setDuration(1500).start();
+        }
+    }
+
+    /**
+     * Dynamically adjusts the text sizes of the clock, glucose, and IoB TextViews
+     * based on the physical screen width (in dp) to prevent text clipping on short/narrow screens.
+     */
+    private void adjustTextSizes() {
+        try {
+            android.util.DisplayMetrics metrics = new android.util.DisplayMetrics();
+            getWindowManager().getDefaultDisplay().getMetrics(metrics);
+            float widthDp = metrics.widthPixels / metrics.density;
+            
+            // Base scaling factor targeting an 800dp wide standard screen
+            float scale = widthDp / 800f;
+            
+            // Safe bounds for the scaling factor to avoid extreme micro/macro scales
+            if (scale < 0.55f) scale = 0.55f;
+            if (scale > 1.25f) scale = 1.25f;
+            
+            int timeTextSize = (int) (180 * scale);
+            int glucoseTextSize = (int) (160 * scale); // 160sp base to fit double arrows & IoB safely
+            int iobTextSize = (int) (48 * scale);
+            
+            tvHours.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, timeTextSize);
+            tvColon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, timeTextSize);
+            tvMinutes.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, timeTextSize);
+            
+            tvGlucose.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, glucoseTextSize);
+            tvIoB.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, iobTextSize);
+            
+            Log.d(TAG, "Dynamic text scaling applied: widthDp=" + widthDp + ", scale=" + scale 
+                + ", timeSp=" + timeTextSize + ", glucoseSp=" + glucoseTextSize + ", iobSp=" + iobTextSize);
+        } catch (Exception e) {
+            Log.e(TAG, "Error adjusting text sizes: " + e.getMessage());
         }
     }
 }
