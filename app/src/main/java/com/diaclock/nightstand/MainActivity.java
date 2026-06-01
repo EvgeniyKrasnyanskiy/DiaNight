@@ -1,6 +1,11 @@
 package com.diaclock.nightstand;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.BatteryManager;
+import android.view.MotionEvent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.media.MediaPlayer;
@@ -48,10 +53,39 @@ public class MainActivity extends AppCompatActivity {
     private ImageView ivSettings;
     private ImageView ivAlarmBell;
     private ImageView ivNetworkWarning;
+    
+    // New UI elements for IoB & Battery
+    private TextView tvIoB;
+    private View ivBatteryContainer;
+    private ImageView ivBatteryIcon;
+    private TextView tvBatteryPercent;
 
     // Handlers and Runnables
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Handler breathingHandler = new Handler(Looper.getMainLooper());
+    private final Handler inactivityHandler = new Handler(Looper.getMainLooper());
+    private final Handler pixelShiftHandler = new Handler(Looper.getMainLooper());
+    
+    private boolean isControlsFaded = false;
+    private final Runnable inactivityRunnable = this::fadeAttributesOut;
+    
+    private final Runnable pixelShiftRunnable = new Runnable() {
+        @Override
+        public void run() {
+            // Random offset between -16 and +16 pixels
+            float shiftX = (float) (Math.random() * 32 - 16);
+            float shiftY = (float) (Math.random() * 32 - 16);
+            
+            View viewToShift = findViewById(R.id.centralClickArea);
+            if (viewToShift != null) {
+                viewToShift.setTranslationX(shiftX);
+                viewToShift.setTranslationY(shiftY);
+            }
+            
+            // Repeat every 2 minutes
+            pixelShiftHandler.postDelayed(this, 120000L);
+        }
+    };
     
     // Toggle state variables
     private boolean isShowingTime = true;
@@ -112,6 +146,15 @@ public class MainActivity extends AppCompatActivity {
         startBreathingAnimation();
         startToggleCycle();
         startNetworkPolling();
+        
+        // Register battery monitor
+        registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        
+        // Start pixel shifting protection
+        pixelShiftHandler.post(pixelShiftRunnable);
+        
+        // Initial inactivity trigger
+        resetUserInactivityTimer();
     }
 
     @Override
@@ -121,6 +164,9 @@ public class MainActivity extends AppCompatActivity {
         loadSettings();
         updateAlarmBellIcon();
         applyTextColor();
+        
+        // Refresh inactivity timer on resume
+        resetUserInactivityTimer();
     }
 
     @Override
@@ -129,6 +175,17 @@ public class MainActivity extends AppCompatActivity {
         stopAlarmSound();
         mainHandler.removeCallbacksAndMessages(null);
         breathingHandler.removeCallbacksAndMessages(null);
+        
+        // Clean up battery receiver
+        try {
+            unregisterReceiver(batteryReceiver);
+        } catch (Exception e) {
+            Log.e(TAG, "Unregistering battery receiver failed: " + e.getMessage());
+        }
+        
+        // Clean up handlers
+        pixelShiftHandler.removeCallbacksAndMessages(null);
+        inactivityHandler.removeCallbacksAndMessages(null);
     }
 
     private void initViews() {
@@ -142,6 +199,11 @@ public class MainActivity extends AppCompatActivity {
         ivSettings = findViewById(R.id.ivSettings);
         ivAlarmBell = findViewById(R.id.ivAlarmBell);
         ivNetworkWarning = findViewById(R.id.ivNetworkWarning);
+        
+        tvIoB = findViewById(R.id.tvIoB);
+        ivBatteryContainer = findViewById(R.id.ivBatteryContainer);
+        ivBatteryIcon = findViewById(R.id.ivBatteryIcon);
+        tvBatteryPercent = findViewById(R.id.tvBatteryPercent);
     }
 
     private void loadSettings() {
@@ -583,6 +645,68 @@ public class MainActivity extends AppCompatActivity {
                 mediaPlayer.release();
                 mediaPlayer = null;
             }
+        }
+    }
+
+    // Touch intercepting to track user activity
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        resetUserInactivityTimer();
+        return super.dispatchTouchEvent(ev);
+    }
+
+    // Battery BroadcastReceiver
+    private final BroadcastReceiver batteryReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+            int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+            int status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+
+            boolean isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                    status == BatteryManager.BATTERY_STATUS_FULL;
+
+            if (level >= 0 && scale > 0) {
+                int levelPercent = (level * 100) / scale;
+                tvBatteryPercent.setText(String.format(Locale.US, "%d%%", levelPercent));
+                if (isCharging) {
+                    ivBatteryIcon.setImageResource(R.drawable.ic_battery_charging);
+                } else {
+                    ivBatteryIcon.setImageResource(R.drawable.ic_battery);
+                }
+            }
+        }
+    };
+
+    // User Inactivity Timer & Transitions
+    private void resetUserInactivityTimer() {
+        inactivityHandler.removeCallbacks(inactivityRunnable);
+        fadeControlsIn();
+        inactivityHandler.postDelayed(inactivityRunnable, 15000L); // 15 seconds
+    }
+
+    private void fadeControlsIn() {
+        if (isControlsFaded) {
+            isControlsFaded = false;
+            ivSettings.animate().alpha(1.0f).setDuration(200).start();
+            ivBatteryContainer.animate().alpha(1.0f).setDuration(200).start();
+            ivAlarmBell.animate().alpha(1.0f).setDuration(200).start();
+        }
+        
+        // Ensure everything is fully visible
+        ivSettings.setAlpha(1.0f);
+        ivBatteryContainer.setAlpha(1.0f);
+        ivAlarmBell.setAlpha(1.0f);
+    }
+
+    private void fadeAttributesOut() {
+        isControlsFaded = true;
+        ivSettings.animate().alpha(0.0f).setDuration(1500).start();
+        ivBatteryContainer.animate().alpha(0.0f).setDuration(1500).start();
+        
+        // Task 7: Hide the alarm bell icon only if alarms are disabled
+        if (!alarmEnabled) {
+            ivAlarmBell.animate().alpha(0.0f).setDuration(1500).start();
         }
     }
 }
