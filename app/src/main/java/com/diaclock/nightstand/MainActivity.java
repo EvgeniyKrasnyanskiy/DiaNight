@@ -452,6 +452,7 @@ public class MainActivity extends AppCompatActivity {
                     showNetworkWarning(true);
                     tvGlucose.setText("---");
                     tvIoB.setVisibility(View.GONE);
+                    adjustGlucoseAndIoBTextSizes();
                     applyTextColor();
                 });
             }
@@ -463,6 +464,7 @@ public class MainActivity extends AppCompatActivity {
                         showNetworkWarning(true);
                         tvGlucose.setText("---");
                         tvIoB.setVisibility(View.GONE);
+                        adjustGlucoseAndIoBTextSizes();
                         applyTextColor();
                     });
                     return;
@@ -500,6 +502,7 @@ public class MainActivity extends AppCompatActivity {
                         runOnUiThread(() -> {
                             showNetworkWarning(false);
                             tvGlucose.setText(String.format(Locale.US, "%.1f%s", glucoseMmol, getTrendArrow(finalDirection)));
+                            adjustGlucoseAndIoBTextSizes();
                             applyTextColor();
                             checkAlarms(glucoseMmol);
                         });
@@ -511,6 +514,7 @@ public class MainActivity extends AppCompatActivity {
                             showNetworkWarning(true);
                             tvGlucose.setText("---");
                             tvIoB.setVisibility(View.GONE);
+                            adjustGlucoseAndIoBTextSizes();
                             applyTextColor();
                         });
                     }
@@ -520,6 +524,7 @@ public class MainActivity extends AppCompatActivity {
                         showNetworkWarning(true);
                         tvGlucose.setText("---");
                         tvIoB.setVisibility(View.GONE);
+                        adjustGlucoseAndIoBTextSizes();
                         applyTextColor();
                     });
                 }
@@ -601,10 +606,14 @@ public class MainActivity extends AppCompatActivity {
                         } else {
                             tvIoB.setVisibility(View.GONE);
                         }
+                        adjustGlucoseAndIoBTextSizes();
                     });
                 } catch (Exception e) {
                     Log.e(TAG, "Parsing Pebble IoB failed: " + e.getMessage());
-                    runOnUiThread(() -> tvIoB.setVisibility(View.GONE));
+                    runOnUiThread(() -> {
+                        tvIoB.setVisibility(View.GONE);
+                        adjustGlucoseAndIoBTextSizes();
+                    });
                 }
             }
         });
@@ -850,20 +859,70 @@ public class MainActivity extends AppCompatActivity {
             if (scale > 1.25f) scale = 1.25f;
             
             int timeTextSize = (int) (180 * scale);
-            int glucoseTextSize = (int) (160 * scale); // 160sp base to fit double arrows & IoB safely
-            int iobTextSize = (int) (48 * scale);
             
             tvHours.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, timeTextSize);
             tvColon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, timeTextSize);
             tvMinutes.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, timeTextSize);
             
+            Log.d(TAG, "Clock text scaling applied: widthDp=" + widthDp + ", scale=" + scale + ", timeSp=" + timeTextSize);
+            
+            // Dynamically scale glucose and IoB based on screen sizes and actual content
+            adjustGlucoseAndIoBTextSizes();
+        } catch (Exception e) {
+            Log.e(TAG, "Error adjusting text sizes: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Dynamically adjusts the text sizes of the glucose and IoB TextViews based on physical screen
+     * width (in dp) and actual text length/visibility to prevent clipping on short/narrow screens.
+     */
+    private void adjustGlucoseAndIoBTextSizes() {
+        try {
+            android.util.DisplayMetrics metrics = new android.util.DisplayMetrics();
+            getWindowManager().getDefaultDisplay().getMetrics(metrics);
+            float widthDp = metrics.widthPixels / metrics.density;
+            
+            // Base scaling factor targeting an 800dp wide standard screen
+            float scale = widthDp / 800f;
+            
+            // Safe bounds for the scaling factor to avoid extreme micro/macro scales
+            if (scale < 0.55f) scale = 0.55f;
+            if (scale > 1.25f) scale = 1.25f;
+            
+            String glucoseText = tvGlucose.getText() != null ? tvGlucose.getText().toString() : "";
+            boolean isIoBVisible = tvIoB.getVisibility() == View.VISIBLE;
+            String iobText = tvIoB.getText() != null ? tvIoB.getText().toString() : "";
+            
+            int glucoseLen = glucoseText.length();
+            int iobLen = isIoBVisible ? iobText.length() : 0;
+            
+            float lengthFactor = 1.0f;
+            
+            // Adjust factor if the text load is high (e.g. 11.2↗ or double arrows) and IoB is present
+            if (glucoseLen >= 5 || (glucoseLen >= 4 && iobLen > 0)) {
+                if (widthDp < 700) {
+                    lengthFactor = 0.82f; // Narrow screen (like Alcatel Shine) with 3-digit sugar & IoB: reduce by 18%
+                } else if (widthDp < 850) {
+                    lengthFactor = 0.90f; // Medium screen: reduce by 10%
+                }
+            }
+            
+            // Extreme load (e.g. 6 chars sugar like 11.2⇈ + 4 chars IoB like 1.25)
+            if (glucoseLen >= 6 && iobLen >= 4) {
+                lengthFactor *= 0.90f; // Extra 10% reduction
+            }
+            
+            int glucoseTextSize = (int) (160 * scale * lengthFactor);
+            int iobTextSize = (int) (48 * scale * lengthFactor);
+            
             tvGlucose.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, glucoseTextSize);
             tvIoB.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, iobTextSize);
             
-            Log.d(TAG, "Dynamic text scaling applied: widthDp=" + widthDp + ", scale=" + scale 
-                + ", timeSp=" + timeTextSize + ", glucoseSp=" + glucoseTextSize + ", iobSp=" + iobTextSize);
+            Log.d(TAG, "Dynamic glucose/iob text scaling applied: widthDp=" + widthDp + ", baseScale=" + scale 
+                + ", lengthFactor=" + lengthFactor + ", glucoseSp=" + glucoseTextSize + ", iobSp=" + iobTextSize);
         } catch (Exception e) {
-            Log.e(TAG, "Error adjusting text sizes: " + e.getMessage());
+            Log.e(TAG, "Error adjusting glucose/iob text sizes: " + e.getMessage());
         }
     }
 }
