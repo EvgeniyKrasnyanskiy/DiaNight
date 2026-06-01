@@ -1,5 +1,5 @@
 package com.diaclock.nightstand;
-
+ 
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
@@ -14,13 +14,22 @@ import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
-
+import android.widget.ImageView;
+import android.app.ProgressDialog;
+ 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-
+import androidx.annotation.NonNull;
+ 
 import com.google.android.material.textfield.TextInputEditText;
-
+ 
+import java.io.IOException;
 import java.util.Locale;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 public class SettingsActivity extends AppCompatActivity {
 
@@ -37,6 +46,9 @@ public class SettingsActivity extends AppCompatActivity {
     private TextInputEditText etNightLow;
     private TextInputEditText etNightHigh;
     private TextInputEditText etSnoozeInterval;
+    
+    private ImageView ivAutoSearch;
+    private ImageView ivHelp;
 
     private View viewColorPreview;
     private Button btnColorWhite;
@@ -88,6 +100,9 @@ public class SettingsActivity extends AppCompatActivity {
         etNightLow = findViewById(R.id.etNightLow);
         etNightHigh = findViewById(R.id.etNightHigh);
         etSnoozeInterval = findViewById(R.id.etSnoozeInterval);
+        
+        ivAutoSearch = findViewById(R.id.ivAutoSearch);
+        ivHelp = findViewById(R.id.ivHelp);
 
         viewColorPreview = findViewById(R.id.viewColorPreview);
         btnColorWhite = findViewById(R.id.btnColorWhite);
@@ -152,6 +167,9 @@ public class SettingsActivity extends AppCompatActivity {
     private void setupListeners() {
         btnCancel.setOnClickListener(v -> finish());
         btnSave.setOnClickListener(v -> saveSettings());
+        
+        ivHelp.setOnClickListener(v -> showHelpDialog());
+        ivAutoSearch.setOnClickListener(v -> startNetworkAutoDiscovery());
 
         // Preset Colors
         btnColorWhite.setOnClickListener(v -> updateColor(Color.WHITE));
@@ -437,6 +455,107 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void showToast(String message) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    }
+
+    private String getWifiIpAddress() {
+        try {
+            android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+            int ipAddress = wm.getConnectionInfo().getIpAddress();
+            return String.format(Locale.US, "%d.%d.%d.%d",
+                    (ipAddress & 0xff),
+                    (ipAddress >> 8 & 0xff),
+                    (ipAddress >> 16 & 0xff),
+                    (ipAddress >> 24 & 0xff));
+        } catch (Exception e) {
+            return "192.168.1.1";
+        }
+    }
+
+    private void startNetworkAutoDiscovery() {
+        final ProgressDialog progressDialog = new ProgressDialog(this);
+        progressDialog.setTitle("Автопоиск мастера");
+        progressDialog.setMessage("Сканирование локальной сети, пожалуйста подождите...");
+        progressDialog.setCancelable(false);
+        progressDialog.show();
+
+        String ip = getWifiIpAddress();
+        String basePrefix = "192.168.1.";
+        if (ip != null && ip.contains(".") && !ip.equals("0.0.0.0")) {
+            int lastDot = ip.lastIndexOf('.');
+            basePrefix = ip.substring(0, lastDot + 1);
+        }
+
+        final String subnetPrefix = basePrefix;
+        final java.util.concurrent.atomic.AtomicBoolean found = new java.util.concurrent.atomic.AtomicBoolean(false);
+        final java.util.concurrent.atomic.AtomicInteger finishedCount = new java.util.concurrent.atomic.AtomicInteger(0);
+
+        OkHttpClient scanClient = new OkHttpClient.Builder()
+                .connectTimeout(600, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .readTimeout(600, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .build();
+
+        for (int i = 1; i <= 254; i++) {
+            final String targetIp = subnetPrefix + i;
+            String url = "http://" + targetIp + ":17580/sgv.json?brief_mode=Y";
+
+            Request request = new Request.Builder().url(url).build();
+            scanClient.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                    checkScanProgress(finishedCount, found, progressDialog);
+                }
+
+                @Override
+                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                    if (response.isSuccessful()) {
+                        if (found.compareAndSet(false, true)) {
+                            runOnUiThread(() -> {
+                                etIpAddress.setText(targetIp);
+                                progressDialog.dismiss();
+                                Toast.makeText(SettingsActivity.this, "xDrip+ успешно найден! IP: " + targetIp, Toast.LENGTH_LONG).show();
+                            });
+                        }
+                    }
+                    response.close();
+                    checkScanProgress(finishedCount, found, progressDialog);
+                }
+            });
+        }
+    }
+
+    private void checkScanProgress(java.util.concurrent.atomic.AtomicInteger finishedCount, 
+                                   java.util.concurrent.atomic.AtomicBoolean found, 
+                                   ProgressDialog progressDialog) {
+        int current = finishedCount.incrementAndGet();
+        if (current >= 254 && !found.get()) {
+            runOnUiThread(() -> {
+                progressDialog.dismiss();
+                Toast.makeText(SettingsActivity.this, "xDrip+ не найден в вашей Wi-Fi сети. Убедитесь, что веб-служба включена в xDrip+.", Toast.LENGTH_LONG).show();
+            });
+        }
+    }
+
+    private void showHelpDialog() {
+        String helpText = "Как настроить DiaClock:\n\n" +
+                "1. На смартфоне-мастере с xDrip+:\n" +
+                "   • Откройте xDrip+ -> Настройки -> Настройки межпрограммного взаимодействия (Inter-app settings).\n" +
+                "   • Включите «Локальный веб-сервер» (Local Web Service).\n" +
+                "   • Включите «Локальное вещание» (Broadcast locally).\n" +
+                "   • В поле «Секретный ключ веб-службы» (API Secret) задайте или скопируйте ключ (минимум 12 символов).\n\n" +
+                "2. Настройка смартфона DiaClock:\n" +
+                "   • Подключите оба устройства к одной Wi-Fi сети.\n" +
+                "   • Нажмите на иконку «Лупа» (автопоиск) рядом с полем ввода IP для автоматического нахождения мастера.\n" +
+                "   • Если автопоиск не сработал, введите IP-адрес мастера вручную.\n" +
+                "   • Введите API Secret точно такой же, как в xDrip+.\n" +
+                "   • Нажмите «Сохранить».\n\n" +
+                "3. Оптимизация батареи (ВАЖНО!):\n" +
+                "   • В настройках Android обоих смартфонов отключите оптимизацию батареи для xDrip+ и DiaClock, чтобы система не закрывала их ночью.";
+
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Инструкция по настройке")
+                .setMessage(helpText)
+                .setPositiveButton("Понятно", null)
+                .show();
     }
 
     @Override
