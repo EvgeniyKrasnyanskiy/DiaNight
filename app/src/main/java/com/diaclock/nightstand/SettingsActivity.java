@@ -457,18 +457,45 @@ public class SettingsActivity extends AppCompatActivity {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
     }
 
-    private String getWifiIpAddress() {
+    private String getLocalIpAddress() {
+        try {
+            for (java.util.Enumeration<java.net.NetworkInterface> en = java.net.NetworkInterface.getNetworkInterfaces(); en.hasMoreElements();) {
+                java.net.NetworkInterface intf = en.nextElement();
+                if (intf.isLoopback() || !intf.isUp()) {
+                    continue;
+                }
+                for (java.util.Enumeration<java.net.InetAddress> enumIpAddr = intf.getInetAddresses(); enumIpAddr.hasMoreElements();) {
+                    java.net.InetAddress inetAddress = enumIpAddr.nextElement();
+                    if (!inetAddress.isLoopbackAddress() && inetAddress instanceof java.net.Inet4Address) {
+                        String ip = inetAddress.getHostAddress();
+                        if (ip != null && !ip.equals("0.0.0.0")) {
+                            // Ensure it is a typical local subnet address (192.168.x.x, 10.x.x.x, 172.x.x.x)
+                            if (ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("172.")) {
+                                android.util.Log.d("DiaNightScan", "Found local IPv4 interface: " + ip + " on " + intf.getName());
+                                return ip;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.e("DiaNightScan", "Error getting local IP address", e);
+        }
+        // Fallback to old WiFi manager method just in case
         try {
             android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
             int ipAddress = wm.getConnectionInfo().getIpAddress();
-            return String.format(Locale.US, "%d.%d.%d.%d",
-                    (ipAddress & 0xff),
-                    (ipAddress >> 8 & 0xff),
-                    (ipAddress >> 16 & 0xff),
-                    (ipAddress >> 24 & 0xff));
+            if (ipAddress != 0) {
+                return String.format(Locale.US, "%d.%d.%d.%d",
+                        (ipAddress & 0xff),
+                        (ipAddress >> 8 & 0xff),
+                        (ipAddress >> 16 & 0xff),
+                        (ipAddress >> 24 & 0xff));
+            }
         } catch (Exception e) {
-            return "192.168.1.1";
+            // Ignore
         }
+        return "192.168.1.1";
     }
 
     private void startNetworkAutoDiscovery() {
@@ -478,20 +505,30 @@ public class SettingsActivity extends AppCompatActivity {
         progressDialog.setCancelable(false);
         progressDialog.show();
 
-        String ip = getWifiIpAddress();
+        String ip = getLocalIpAddress();
+        android.util.Log.d("DiaNightScan", "Detected device IP: " + ip);
+        
         String basePrefix = "192.168.1.";
-        if (ip != null && ip.contains(".") && !ip.equals("0.0.0.0")) {
+        if (ip != null && ip.contains(".") && !ip.equals("0.0.0.0") && !ip.equals("127.0.0.1")) {
             int lastDot = ip.lastIndexOf('.');
             basePrefix = ip.substring(0, lastDot + 1);
         }
 
         final String subnetPrefix = basePrefix;
+        android.util.Log.d("DiaNightScan", "Using subnet prefix for scanning: " + subnetPrefix);
+        
         final java.util.concurrent.atomic.AtomicBoolean found = new java.util.concurrent.atomic.AtomicBoolean(false);
         final java.util.concurrent.atomic.AtomicInteger finishedCount = new java.util.concurrent.atomic.AtomicInteger(0);
 
+        // Custom dispatcher to allow all 254 requests to execute in parallel immediately
+        okhttp3.Dispatcher dispatcher = new okhttp3.Dispatcher();
+        dispatcher.setMaxRequests(254);
+        dispatcher.setMaxRequestsPerHost(254);
+
         OkHttpClient scanClient = new OkHttpClient.Builder()
-                .connectTimeout(600, java.util.concurrent.TimeUnit.MILLISECONDS)
-                .readTimeout(600, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .dispatcher(dispatcher)
+                .connectTimeout(1500, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .readTimeout(1500, java.util.concurrent.TimeUnit.MILLISECONDS)
                 .build();
 
         for (int i = 1; i <= 254; i++) {
@@ -507,12 +544,28 @@ public class SettingsActivity extends AppCompatActivity {
 
                 @Override
                 public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    if (response.isSuccessful()) {
+                    final int code = response.code();
+                    android.util.Log.d("DiaNightScan", "Response from " + targetIp + ": code=" + code);
+                    
+                    // 200 OK or 401 Unauthorized mean the xDrip+ service is active at this IP!
+                    if (response.isSuccessful() || code == 401) {
                         if (found.compareAndSet(false, true)) {
+                            // Cancel any remaining queued requests to free up resources
+                            scanClient.dispatcher().cancelAll();
+                            
                             runOnUiThread(() -> {
                                 etIpAddress.setText(targetIp);
                                 progressDialog.dismiss();
-                                Toast.makeText(SettingsActivity.this, "xDrip+ успешно найден! IP: " + targetIp, Toast.LENGTH_LONG).show();
+                                if (code == 401) {
+                                    Toast.makeText(SettingsActivity.this, "xDrip+ найден! IP: " + targetIp + "\nНо требуется авторизация. Пожалуйста, проверьте API Secret!", Toast.LENGTH_LONG).show();
+                                    new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                            .setTitle("xDrip+ найден!")
+                                            .setMessage("Мастер-устройство успешно обнаружено на IP: " + targetIp + ".\n\nОднако на нём включена защита. Убедитесь, что вы ввели правильный «Секретный ключ веб-службы (API Secret)» ниже, иначе данные не будут поступать.")
+                                            .setPositiveButton("ОК", null)
+                                            .show();
+                                } else {
+                                    Toast.makeText(SettingsActivity.this, "xDrip+ успешно найден! IP: " + targetIp, Toast.LENGTH_LONG).show();
+                                }
                             });
                         }
                     }
