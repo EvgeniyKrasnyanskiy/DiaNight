@@ -491,7 +491,7 @@ public class MainActivity extends AppCompatActivity {
                         
                         runOnUiThread(() -> {
                             showNetworkWarning(false);
-                            tvGlucose.setText(String.format(Locale.US, "%.1f %s", glucoseMmol, getTrendArrow(finalDirection)));
+                            tvGlucose.setText(String.format(Locale.US, "%.1f%s", glucoseMmol, getTrendArrow(finalDirection)));
                             applyTextColor();
                             checkAlarms(glucoseMmol);
                         });
@@ -587,7 +587,7 @@ public class MainActivity extends AppCompatActivity {
                     final double finalIob = iobValue;
                     runOnUiThread(() -> {
                         if (finalIob >= 0) {
-                            tvIoB.setText(String.format(Locale.US, "%.2f U", finalIob));
+                            tvIoB.setText(String.format(Locale.US, "%.2f", finalIob));
                             tvIoB.setVisibility(View.VISIBLE);
                             Log.d(TAG, "IoB displayed: " + finalIob);
                         } else {
