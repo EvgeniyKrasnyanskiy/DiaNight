@@ -2,6 +2,27 @@ plugins {
     id 'com.android.application'
 }
 
+def versionPropsFile = file("version.properties")
+def code = 3
+def build = 1
+
+if (versionPropsFile.exists()) {
+    def Properties versionProps = new Properties()
+    versionProps.load(new FileInputStream(versionPropsFile))
+    code = versionProps['VERSION_CODE'].toInteger()
+    build = versionProps['VERSION_BUILD'].toInteger()
+    
+    // Auto-increment build version only during compilation/deployment tasks
+    def runTasks = gradle.startParameter.taskNames
+    if (runTasks.any { it.contains("assemble") || it.contains("install") || it.contains("bundle") || it.contains("generate") }) {
+        build++
+        code++
+        versionProps['VERSION_CODE'] = code.toString()
+        versionProps['VERSION_BUILD'] = build.toString()
+        versionProps.store(new FileOutputStream(versionPropsFile), null)
+    }
+}
+
 android {
     namespace 'com.diaclock.nightstand'
     compileSdk 33
@@ -10,8 +31,8 @@ android {
         applicationId "com.diaclock.nightstand"
         minSdk 23
         targetSdk 33
-        versionCode 2
-        versionName "1.1"
+        versionCode code
+        versionName "1.1." + build
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
