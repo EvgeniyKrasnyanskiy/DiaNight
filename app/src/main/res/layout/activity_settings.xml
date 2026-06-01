@@ -108,6 +108,89 @@
                         android:singleLine="true"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
+                <!-- Actions row for Test & AutoSearch -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="12dp">
+
+                    <!-- Test Connection Button -->
+                    <Button
+                        android:id="@+id/btnTestConnection"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Проверить связь"
+                        android:textSize="12sp"
+                        android:textColor="@color/text_primary"
+                        android:backgroundTint="@color/bg_input"
+                        style="@style/Widget.MaterialComponents.Button"
+                        android:layout_marginEnd="8dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"/>
+
+                    <!-- Auto Search Button -->
+                    <Button
+                        android:id="@+id/btnAutoSearchBeta"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Автопоиск (Beta)"
+                        android:textSize="12sp"
+                        android:textColor="@color/black"
+                        android:backgroundTint="@color/colorPrimary"
+                        style="@style/Widget.MaterialComponents.Button"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"/>
+                </LinearLayout>
+
+                <!-- Save & Exit Button (Full width) -->
+                <Button
+                    android:id="@+id/btnSave"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Сохранить и выйти"
+                    android:textColor="@color/black"
+                    android:backgroundTint="@color/colorPrimary"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="12dp"
+                    style="@style/Widget.MaterialComponents.Button"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"/>
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Board Configuration Card -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/bg_card"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Настройки табло"
+                    android:textColor="@color/colorPrimary"
+                    android:textStyle="bold"
+                    android:textSize="16sp"
+                    android:layout_marginBottom="12dp"/>
+
                 <!-- Toggle Interval -->
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
@@ -125,46 +208,6 @@
                         android:textColor="@color/text_primary"
                         android:singleLine="true"/>
                 </com.google.android.material.textfield.TextInputLayout>
-
-                <!-- Actions row for Test & AutoSearch -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginTop="16dp"
-                    android:gravity="end">
-
-                    <!-- Test Connection Button -->
-                    <Button
-                        android:id="@+id/btnTestConnection"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Проверить связь"
-                        android:textSize="12sp"
-                        android:textColor="@color/text_primary"
-                        android:backgroundTint="@color/bg_input"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_marginEnd="8dp"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"/>
-
-                    <!-- Auto Search Button -->
-                    <Button
-                        android:id="@+id/btnAutoSearchBeta"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Автопоиск (Beta)"
-                        android:textSize="12sp"
-                        android:textColor="@color/black"
-                        android:backgroundTint="@color/colorPrimary"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"/>
-                </LinearLayout>
 
             </LinearLayout>
         </androidx.cardview.widget.CardView>
@@ -686,33 +729,7 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- Actions -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="end"
-            android:layout_marginBottom="16dp">
 
-            <Button
-                android:id="@+id/btnCancel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/btn_cancel"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:textColor="@color/text_secondary"
-                android:layout_marginEnd="8dp"/>
-
-            <Button
-                android:id="@+id/btnSave"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/btn_save"
-                android:textColor="@color/black"
-                android:backgroundTint="@color/colorPrimary"
-                style="@style/Widget.MaterialComponents.Button"/>
-
-        </LinearLayout>
 
     </LinearLayout>
 

@@ -69,7 +69,6 @@ public class SettingsActivity extends AppCompatActivity {
     private Button btnChooseRingtone;
     private Button btnTestRingtone;
 
-    private Button btnCancel;
     private Button btnSave;
 
     // State Variables
@@ -129,7 +128,6 @@ public class SettingsActivity extends AppCompatActivity {
         btnChooseRingtone = findViewById(R.id.btnChooseRingtone);
         btnTestRingtone = findViewById(R.id.btnTestRingtone);
 
-        btnCancel = findViewById(R.id.btnCancel);
         btnSave = findViewById(R.id.btnSave);
     }
 
@@ -178,7 +176,6 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void setupListeners() {
-        btnCancel.setOnClickListener(v -> finish());
         btnSave.setOnClickListener(v -> saveSettings());
         
         ivHelp.setOnClickListener(v -> showHelpDialog());
@@ -518,6 +515,16 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void startNetworkAutoDiscovery() {
+        String secretKey = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
+        if (secretKey.isEmpty()) {
+            new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle("Требуется секретный ключ")
+                    .setMessage("Автопоиск возможен только с ключом!\n\nПожалуйста, введите «Секретный ключ веб-службы (API Secret)» перед запуском автопоиска.")
+                    .setPositiveButton("ОК", null)
+                    .show();
+            return;
+        }
+
         String basePrefix = "";
         
         // 1. Preferential Subnet: Extract from the current IP field if available
@@ -639,8 +646,14 @@ public class SettingsActivity extends AppCompatActivity {
                     // Instantly shutdown the executor to free up system threads
                     executor.shutdownNow();
 
+                    // Automatically save IP in SharedPreferences
+                    SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
+                    editor.putString("ip_address", targetIp);
+                    editor.apply();
+
                     runOnUiThread(() -> {
                         etIpAddress.setText(targetIp);
+                        etIpAddress.requestFocus();
                         progressDialog.dismiss();
                         if (code == 401) {
                             Toast.makeText(SettingsActivity.this, "xDrip+ найден! IP: " + targetIp + "\nНо требуется авторизация. Пожалуйста, проверьте API Secret!", Toast.LENGTH_LONG).show();
