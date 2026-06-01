@@ -465,7 +465,6 @@ public class MainActivity extends AppCompatActivity {
                     JsonElement element = JsonParser.parseString(responseBody);
                     int sgv = 0;
                     String direction = "";
-                    double iob = -1.0;
                     
                     if (element.isJsonArray()) {
                         JsonArray array = element.getAsJsonArray();
@@ -475,18 +474,12 @@ public class MainActivity extends AppCompatActivity {
                             if (obj.has("direction")) {
                                 direction = obj.get("direction").getAsString();
                             }
-                            if (obj.has("iob")) {
-                                iob = obj.get("iob").getAsDouble();
-                            }
                         }
                     } else if (element.isJsonObject()) {
                         com.google.gson.JsonObject obj = element.getAsJsonObject();
                         sgv = obj.get("sgv").getAsInt();
                         if (obj.has("direction")) {
                             direction = obj.get("direction").getAsString();
-                        }
-                        if (obj.has("iob")) {
-                            iob = obj.get("iob").getAsDouble();
                         }
                     }
 
@@ -495,24 +488,16 @@ public class MainActivity extends AppCompatActivity {
                         lastGlucoseMmol = glucoseMmol;
                         final String finalDirection = direction;
                         lastDirection = direction;
-                        final double finalIob = iob;
                         
                         runOnUiThread(() -> {
                             showNetworkWarning(false);
-                            // Append the Unicode trend arrow directly onto tvGlucose text
                             tvGlucose.setText(String.format(Locale.US, "%.1f %s", glucoseMmol, getTrendArrow(finalDirection)));
-                            
-                            // Display IoB if present
-                            if (finalIob >= 0) {
-                                tvIoB.setText(String.format(Locale.US, "%.2f U", finalIob));
-                                tvIoB.setVisibility(View.VISIBLE);
-                            } else {
-                                tvIoB.setVisibility(View.GONE);
-                            }
-                            
                             applyTextColor();
                             checkAlarms(glucoseMmol);
                         });
+                        
+                        // Fetch IoB from the separate /pebble endpoint
+                        fetchIoBData();
                     } else {
                         runOnUiThread(() -> {
                             showNetworkWarning(true);
@@ -522,7 +507,7 @@ public class MainActivity extends AppCompatActivity {
                         });
                     }
                 } catch (Exception e) {
-                    Log.e(TAG, "Parsing JSON failed: " + e.getMessage());
+                    Log.e(TAG, "Parsing SGV JSON failed: " + e.getMessage());
                     runOnUiThread(() -> {
                         showNetworkWarning(true);
                         tvGlucose.setText("---");
@@ -532,6 +517,112 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+    }
+
+    /**
+     * Fetches IoB (Insulin on Board) from the xDrip+ /pebble endpoint.
+     * The /sgv.json endpoint does NOT include IoB data.
+     * The /pebble response structure: {"status":[{"iob":{"iob":1.25,...},...}],...}
+     */
+    private void fetchIoBData() {
+        String pebbleUrl = "http://" + serverIp + ":17580/pebble";
+        
+        Request.Builder requestBuilder = new Request.Builder().url(pebbleUrl);
+        if (apiSecret != null && !apiSecret.trim().isEmpty()) {
+            String hashedSecret = computeSHA1(apiSecret);
+            requestBuilder.addHeader("api-secret", hashedSecret);
+        }
+        Request pebbleRequest = requestBuilder.build();
+
+        httpClient.newCall(pebbleRequest).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.d(TAG, "Pebble IoB fetch failed: " + e.getMessage());
+                runOnUiThread(() -> tvIoB.setVisibility(View.GONE));
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (!response.isSuccessful()) {
+                    runOnUiThread(() -> tvIoB.setVisibility(View.GONE));
+                    return;
+                }
+
+                String body = response.body() != null ? response.body().string() : "";
+                Log.d(TAG, "Pebble raw response (first 500 chars): " + body.substring(0, Math.min(body.length(), 500)));
+                try {
+                    com.google.gson.JsonObject root = JsonParser.parseString(body).getAsJsonObject();
+                    double iobValue = -1.0;
+                    
+                    // Parse IoB from: {"bgs":[{"iob":"0,64",...}]} (Standard Nightscout Pebble format in xDrip+)
+                    if (root.has("bgs")) {
+                        JsonArray bgsArray = root.getAsJsonArray("bgs");
+                        if (bgsArray.size() > 0) {
+                            com.google.gson.JsonObject bgsObj = bgsArray.get(0).getAsJsonObject();
+                            if (bgsObj.has("iob")) {
+                                iobValue = parseIobElement(bgsObj.get("iob"));
+                            }
+                        }
+                    }
+                    
+                    // Fallback to: {"status":[{"iob":{"iob":1.25,...}}]}
+                    if (iobValue < 0 && root.has("status")) {
+                        JsonArray statusArray = root.getAsJsonArray("status");
+                        if (statusArray.size() > 0) {
+                            com.google.gson.JsonObject statusObj = statusArray.get(0).getAsJsonObject();
+                            if (statusObj.has("iob")) {
+                                JsonElement statusIobElement = statusObj.get("iob");
+                                if (statusIobElement.isJsonObject()) {
+                                    com.google.gson.JsonObject iobObj = statusIobElement.getAsJsonObject();
+                                    if (iobObj.has("iob")) {
+                                        iobValue = parseIobElement(iobObj.get("iob"));
+                                    }
+                                } else {
+                                    iobValue = parseIobElement(statusIobElement);
+                                }
+                            }
+                        }
+                    }
+                    
+                    final double finalIob = iobValue;
+                    runOnUiThread(() -> {
+                        if (finalIob >= 0) {
+                            tvIoB.setText(String.format(Locale.US, "%.2f U", finalIob));
+                            tvIoB.setVisibility(View.VISIBLE);
+                            Log.d(TAG, "IoB displayed: " + finalIob);
+                        } else {
+                            tvIoB.setVisibility(View.GONE);
+                        }
+                    });
+                } catch (Exception e) {
+                    Log.e(TAG, "Parsing Pebble IoB failed: " + e.getMessage());
+                    runOnUiThread(() -> tvIoB.setVisibility(View.GONE));
+                }
+            }
+        });
+    }
+
+    /**
+     * Safely parses an IoB JsonElement to double, handling potential localized decimal comma separators (e.g. "0,64").
+     */
+    private double parseIobElement(JsonElement iobElement) {
+        if (iobElement == null || iobElement.isJsonNull()) {
+            return -1.0;
+        }
+        try {
+            if (iobElement.isJsonPrimitive()) {
+                String strValue = iobElement.getAsString().trim();
+                if (strValue.isEmpty()) {
+                    return -1.0;
+                }
+                // Handle European comma decimal separator
+                strValue = strValue.replace(",", ".");
+                return Double.parseDouble(strValue);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to parse IoB element: " + e.getMessage());
+        }
+        return -1.0;
     }
 
     private void showNetworkWarning(boolean error) {

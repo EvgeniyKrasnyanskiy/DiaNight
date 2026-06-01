@@ -499,12 +499,6 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void startNetworkAutoDiscovery() {
-        final ProgressDialog progressDialog = new ProgressDialog(this);
-        progressDialog.setTitle("Автопоиск мастера");
-        progressDialog.setMessage("Сканирование локальной сети, пожалуйста подождите...");
-        progressDialog.setCancelable(false);
-        progressDialog.show();
-
         String ip = getLocalIpAddress();
         android.util.Log.d("DiaNightScan", "Detected device IP: " + ip);
         
@@ -513,9 +507,26 @@ public class SettingsActivity extends AppCompatActivity {
             int lastDot = ip.lastIndexOf('.');
             basePrefix = ip.substring(0, lastDot + 1);
         }
+        
+        // Fallback: if auto-detection gave us the default, try to extract prefix from the current IP field
+        if (basePrefix.equals("192.168.1.")) {
+            String fieldIp = etIpAddress.getText() != null ? etIpAddress.getText().toString().trim() : "";
+            if (fieldIp.contains(".") && !fieldIp.isEmpty()) {
+                int lastDot = fieldIp.lastIndexOf('.');
+                String fieldPrefix = fieldIp.substring(0, lastDot + 1);
+                android.util.Log.d("DiaNightScan", "Using fallback prefix from IP field: " + fieldPrefix);
+                basePrefix = fieldPrefix;
+            }
+        }
 
         final String subnetPrefix = basePrefix;
         android.util.Log.d("DiaNightScan", "Using subnet prefix for scanning: " + subnetPrefix);
+
+        final ProgressDialog progressDialog = new ProgressDialog(this);
+        progressDialog.setTitle("Автопоиск мастера");
+        progressDialog.setMessage("Сканирование подсети: " + subnetPrefix + "X\nПожалуйста, подождите...");
+        progressDialog.setCancelable(false);
+        progressDialog.show();
         
         final java.util.concurrent.atomic.AtomicBoolean found = new java.util.concurrent.atomic.AtomicBoolean(false);
         final java.util.concurrent.atomic.AtomicInteger finishedCount = new java.util.concurrent.atomic.AtomicInteger(0);
