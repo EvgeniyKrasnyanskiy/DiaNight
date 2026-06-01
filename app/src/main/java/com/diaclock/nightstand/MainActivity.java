@@ -902,15 +902,15 @@ public class MainActivity extends AppCompatActivity {
             // Adjust factor if the text load is high (e.g. 11.2↗ or double arrows) and IoB is present
             if (glucoseLen >= 5 || (glucoseLen >= 4 && iobLen > 0)) {
                 if (widthDp < 700) {
-                    lengthFactor = 0.82f; // Narrow screen (like Alcatel Shine) with 3-digit sugar & IoB: reduce by 18%
+                    lengthFactor = 0.90f; // Narrow screen (like Alcatel Shine) with 3-digit sugar & IoB: reduce by 10%
                 } else if (widthDp < 850) {
-                    lengthFactor = 0.90f; // Medium screen: reduce by 10%
+                    lengthFactor = 0.93f; // Medium screen: reduce by 7%
                 }
             }
             
             // Extreme load (e.g. 6 chars sugar like 11.2⇈ + 4 chars IoB like 1.25)
             if (glucoseLen >= 6 && iobLen >= 4) {
-                lengthFactor *= 0.90f; // Extra 10% reduction
+                lengthFactor *= 0.95f; // Extra 5% reduction
             }
             
             int glucoseTextSize = (int) (160 * scale * lengthFactor);
