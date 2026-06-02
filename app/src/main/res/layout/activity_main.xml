@@ -96,6 +96,22 @@
             android:focusable="true"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:padding="10dp"
+            app:layout_constraintEnd_toStartOf="@id/ivExit"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            android:layout_marginEnd="16dp"/>
+
+        <!-- Exit Icon (Top-Right) -->
+        <ImageView
+            android:id="@+id/ivExit"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/ic_close"
+            android:contentDescription="Exit App"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:padding="10dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"/>

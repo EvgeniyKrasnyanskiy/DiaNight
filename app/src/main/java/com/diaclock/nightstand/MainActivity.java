@@ -53,6 +53,7 @@ public class MainActivity extends AppCompatActivity {
     private ImageView ivSettings;
     private ImageView ivAlarmBell;
     private ImageView ivNetworkWarning;
+    private ImageView ivExit;
     
     // New UI elements for IoB & Battery
     private TextView tvIoB;
@@ -80,6 +81,15 @@ public class MainActivity extends AppCompatActivity {
             if (viewToShift != null) {
                 viewToShift.setTranslationX(shiftX);
                 viewToShift.setTranslationY(shiftY);
+            }
+
+            // Shift the status bar container as well to prevent burn-in on top row icons (bell, gear, battery)
+            View statusBar = findViewById(R.id.statusBarContainer);
+            if (statusBar != null) {
+                float statusShiftX = (float) (Math.random() * 16 - 8);
+                float statusShiftY = (float) (Math.random() * 16 - 8);
+                statusBar.setTranslationX(statusShiftX);
+                statusBar.setTranslationY(statusShiftY);
             }
             
             // Repeat every 2 minutes
@@ -121,7 +131,7 @@ public class MainActivity extends AppCompatActivity {
     // Breathing Animation variables
     private float currentAlpha = 1.0f;
     private boolean alphaDecreasing = true;
-    private final float alphaStep = 0.05f;
+    private final float alphaStep = 0.035f; // Slower breathing (2.0s period: 20 steps down, 20 steps up)
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -201,6 +211,7 @@ public class MainActivity extends AppCompatActivity {
         ivSettings = findViewById(R.id.ivSettings);
         ivAlarmBell = findViewById(R.id.ivAlarmBell);
         ivNetworkWarning = findViewById(R.id.ivNetworkWarning);
+        ivExit = findViewById(R.id.ivExit);
         
         tvIoB = findViewById(R.id.tvIoB);
         ivBatteryContainer = findViewById(R.id.ivBatteryContainer);
@@ -218,6 +229,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupListeners() {
+        // Exit application click listener
+        ivExit.setOnClickListener(v -> finish());
+
         // Toggle Alarms Enabled state (Bell) with Toast hints
         ivAlarmBell.setOnClickListener(v -> {
             alarmEnabled = !alarmEnabled;
@@ -822,18 +836,21 @@ public class MainActivity extends AppCompatActivity {
             ivSettings.animate().alpha(1.0f).setDuration(200).start();
             ivBatteryContainer.animate().alpha(1.0f).setDuration(200).start();
             ivAlarmBell.animate().alpha(1.0f).setDuration(200).start();
+            ivExit.animate().alpha(1.0f).setDuration(200).start();
         }
         
         // Ensure everything is fully visible
         ivSettings.setAlpha(1.0f);
         ivBatteryContainer.setAlpha(1.0f);
         ivAlarmBell.setAlpha(1.0f);
+        ivExit.setAlpha(1.0f);
     }
 
     private void fadeAttributesOut() {
         isControlsFaded = true;
         ivSettings.animate().alpha(0.0f).setDuration(1500).start();
         ivBatteryContainer.animate().alpha(0.0f).setDuration(1500).start();
+        ivExit.animate().alpha(0.0f).setDuration(1500).start();
         
         // Task 7: Hide the alarm bell icon only if alarms are disabled
         if (!alarmEnabled) {
