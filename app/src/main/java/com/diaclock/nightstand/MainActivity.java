@@ -100,6 +100,8 @@ public class MainActivity extends AppCompatActivity {
     // Toggle state variables
     private boolean isShowingTime = true;
     private int toggleIntervalSeconds = 5;
+    private String dataSource = "network";
+    private boolean isReceiverRegistered = false;
     
     // Network variables
     private final OkHttpClient httpClient = new OkHttpClient();
@@ -155,7 +157,14 @@ public class MainActivity extends AppCompatActivity {
         startTimeUpdates();
         startBreathingAnimation();
         startToggleCycle();
-        startNetworkPolling();
+        
+        if ("broadcast".equals(dataSource)) {
+            registerXdripReceiver();
+            tvGlucose.setText("Ждем...");
+            tvIoB.setVisibility(View.GONE);
+        } else {
+            startNetworkPolling();
+        }
         
         // Register battery monitor
         registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
@@ -171,10 +180,32 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Reload all configuration values in case they were modified in SettingsActivity
+        String oldSource = dataSource;
         loadSettings();
         updateAlarmBellIcon();
         applyTextColor();
+        
+        if (!dataSource.equals(oldSource)) {
+            Log.d(TAG, "Data source changed from " + oldSource + " to " + dataSource);
+            if ("broadcast".equals(dataSource)) {
+                mainHandler.removeCallbacks(networkRunnable);
+                registerXdripReceiver();
+                tvGlucose.setText("Ждем...");
+                tvIoB.setVisibility(View.GONE);
+            } else {
+                unregisterXdripReceiver();
+                mainHandler.removeCallbacks(networkRunnable);
+                mainHandler.post(networkRunnable);
+            }
+        } else {
+            if ("broadcast".equals(dataSource)) {
+                registerXdripReceiver();
+            } else {
+                unregisterXdripReceiver();
+                mainHandler.removeCallbacks(networkRunnable);
+                mainHandler.post(networkRunnable);
+            }
+        }
         
         // Refresh inactivity timer on resume
         adjustTextSizes();
@@ -194,6 +225,9 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             Log.e(TAG, "Unregistering battery receiver failed: " + e.getMessage());
         }
+        
+        // Clean up xDrip receiver
+        unregisterXdripReceiver();
         
         // Clean up handlers
         pixelShiftHandler.removeCallbacksAndMessages(null);
@@ -226,6 +260,7 @@ public class MainActivity extends AppCompatActivity {
         toggleIntervalSeconds = prefs.getInt("toggle_interval", 5);
         alarmEnabled = prefs.getBoolean("alarm_enabled", true);
         textColor = prefs.getInt("text_color", Color.WHITE);
+        dataSource = prefs.getString("data_source", "network");
     }
 
     private void setupListeners() {
@@ -415,15 +450,21 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // 4. Nightscout / xDrip Network Integration
-    private void startNetworkPolling() {
-        Runnable networkRunnable = new Runnable() {
-            @Override
-            public void run() {
+    private final Runnable networkRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if ("network".equals(dataSource)) {
                 fetchGlucoseData();
                 mainHandler.postDelayed(this, 10000L); // Pull every 10s
             }
-        };
-        mainHandler.post(networkRunnable);
+        }
+    };
+
+    private void startNetworkPolling() {
+        mainHandler.removeCallbacks(networkRunnable);
+        if ("network".equals(dataSource)) {
+            mainHandler.post(networkRunnable);
+        }
     }
 
     private String computeSHA1(String input) {
@@ -822,6 +863,59 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     };
+
+    // xDrip Broadcast Receiver for local offline mode
+    private final BroadcastReceiver xdripReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent != null && "com.eveningoutpost.dexdrip.BgEstimate".equals(intent.getAction())) {
+                double rawBg = intent.getDoubleExtra("com.eveningoutpost.dexdrip.Extras.BgEstimate", -1.0);
+                String slopeName = intent.getStringExtra("com.eveningoutpost.dexdrip.Extras.BgSlopeName");
+                
+                Log.d(TAG, "Received xDrip broadcast: bg=" + rawBg + ", slope=" + slopeName);
+                
+                if (rawBg > 0) {
+                    double glucoseMmol = rawBg / 18.0;
+                    lastGlucoseMmol = glucoseMmol;
+                    lastDirection = slopeName;
+                    
+                    runOnUiThread(() -> {
+                        showNetworkWarning(false);
+                        tvGlucose.setText(String.format(Locale.US, "%.1f%s", glucoseMmol, getTrendArrow(slopeName)));
+                        tvIoB.setVisibility(View.GONE); // IOB is not broadcasted, hide it
+                        adjustGlucoseAndIoBTextSizes();
+                        applyTextColor();
+                        checkAlarms(glucoseMmol);
+                    });
+                }
+            }
+        }
+    };
+
+    private void registerXdripReceiver() {
+        if (!isReceiverRegistered) {
+            IntentFilter filter = new IntentFilter("com.eveningoutpost.dexdrip.BgEstimate");
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(xdripReceiver, filter, Context.RECEIVER_EXPORTED);
+            } else {
+                registerReceiver(xdripReceiver, filter);
+            }
+            isReceiverRegistered = true;
+            Log.d(TAG, "xDrip BroadcastReceiver registered.");
+        }
+    }
+
+    private void unregisterXdripReceiver() {
+        if (isReceiverRegistered) {
+            try {
+                unregisterReceiver(xdripReceiver);
+            } catch (Exception e) {
+                Log.e(TAG, "Error unregistering receiver: " + e.getMessage());
+            }
+            isReceiverRegistered = false;
+            Log.d(TAG, "xDrip BroadcastReceiver unregistered.");
+        }
+    }
 
     // User Inactivity Timer & Transitions
     private void resetUserInactivityTimer() {
