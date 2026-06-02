@@ -1,4 +1,4 @@
-# Результаты выполнения задачи: Доработка DiaNight (Версия 1.1.27)
+# Результаты выполнения задачи: Доработка DiaNight (Версия 1.1.33)
 
 Этот документ содержит отчет о выполненных изменениях, результатах сборки и тестирования новых функций приложения.
 
@@ -31,16 +31,16 @@
 ### 5. Проверка обновлений с GitHub прямо в приложении
 *   В разметку настроек добавлена новая карточка «Обновление приложения».
 *   Внедрены функции:
-    *   Флажок автопроверки `chkAutoCheckUpdates` (при включении автоматически запрашивает информацию о релизах при каждом входе в настройки).
-    *   Кнопка «Проверить» для ручного запуска поиска обновлений.
-    *   Текстовое поле статуса `tvUpdateStatus` с подробным описанием результата проверки.
-    *   Динамическая кнопка «Скачать APK», которая появляется только при обнаружении более новой версии на GitHub и при нажатии перенаправляет пользователя в браузер для быстрого скачивания файла обновления.
+         *   Флажок автопроверки `chkAutoCheckUpdates` (при включении автоматически запрашивает информацию о релизах при каждом входе в настройки).
+         *   Кнопка «Проверить» для ручного запуска поиска обновлений.
+         *   Текстовое поле статуса `tvUpdateStatus` с подробным описанием результата проверки.
+         *   Динамическая кнопка «Скачать APK», которая появляется только при обнаружении более новой версии на GitHub и при нажатии перенаправляет пользователя в браузер для быстрого скачивания файла обновления.
 *   Сравнение версий производится покомпонентно (Major.Minor.Build) с помощью безопасного парсинга строк версий.
 
 ### 6. Локальный обмен данными без сети (Broadcast)
 *   В верхнюю часть настроек добавлена карточка «Источник данных» с возможностью переключения между режимами:
-    *   **Сетевой (WiFi / xDrip+ Web Service)** — классический опрос удаленного сервера.
-    *   **Локальный (Broadcast от xDrip+ без сети)** — получение данных на одном телефоне без использования сети.
+         *   **Сетевой (WiFi / xDrip+ Web Service)** — классический опрос удаленного сервера.
+         *   **Локальный (Broadcast от xDrip+ без сети)** — получение данных на одном телефоне без использования сети.
 *   При переключении в локальный режим поля ввода IP и ключа визуально тускнеют (alpha = 0.5) и отключаются, подсказывая пользователю, что сетевые параметры не требуются.
 *   **Динамическое предупреждение (хинт):** При переключении в режим Broadcast подсказка под источником данных окрашивается в оранжевый цвет предупреждения (`@color/color_warning_orange`) и предупреждает, что в данном режиме значение активного инсулина (IoB) не передается и отображаться на экране не будет.
 *   В `MainActivity.java` реализован динамический `BroadcastReceiver`, который слушает интенты `com.eveningoutpost.dexdrip.BgEstimate`.
@@ -55,22 +55,31 @@
 
 ## Результаты компиляции и сборки
 
-*   Успешно выполнена тестовая компиляция Java-классов (`compileDebugJavaWithJavac`).
-*   Успешно выполнена полная сборка отладочного пакета (`assembleDebug`).
-*   В процессе сборки Gradle автоматически считал и инкрементировал версию приложения в файле `version.properties`. Текущие параметры сборки:
-    *   `VERSION_BUILD=27`
-    *   `VERSION_CODE=29`
-    *   Результирующий файл сборки: **`DiaNight-v1.1.27-debug.apk`**.
+*   Успешно выполнена компиляция релизного пакета (`assembleRelease`).
+*   В процессе сборки Gradle автоматически инкрементировал версию приложения. Параметры финальной сборки:
+    *   `VERSION_BUILD=33`
+    *   `VERSION_CODE=35`
+    *   Результирующий релизный файл сборки: **`DiaNight-v1.1.33-release.apk`**.
+
+---
+
+## Релиз на GitHub
+
+*   Создан и опубликован официальный релиз на GitHub: [v1.1.33](https://github.com/EvgeniyKrasnyanskiy/DiaNight/releases/tag/v1.1.33)
+*   К релизу успешно прикреплен скомпилированный файл **`DiaNight-v1.1.33-release.apk`**.
 
 ---
 
 ## Статус Git-репозитория
 
-*   Все измененные файлы закомичены с использованием Standard Conventional Commits:
-    1.  `docs: update implementation plan...` (комит планов)
-    2.  `feat: add exit button, status bar burn-in protection, and slow down colon blinking to 2s` (комит главного экрана)
-    3.  `feat: implement settings UI changes for data source selection...` (комит настроек)
-    4.  `feat: implement local offline broadcast mode and add package queries visibility` (комит логики обмена)
-    5.  `docs: finalize task 22 checklist and update auto-incremented version properties` (комит чек-листов и версии)
-    6.  `docs: update README.md to describe new features` (комит документации)
+*   Все измененные файлы закоммичены с использованием Standard Conventional Commits:
+    1.  `docs: update implementation plan...` (коммит планов)
+    2.  `feat: add exit button, status bar burn-in protection, and slow down colon blinking to 2s` (коммит главного экрана)
+    3.  `feat: implement settings UI changes for data source selection...` (коммит настроек)
+    4.  `feat: implement local offline broadcast mode and add package queries visibility` (коммит логики обмена)
+    5.  `docs: finalize task 22 checklist and update auto-incremented version properties` (коммит чек-листов и версии)
+    6.  `docs: update README.md to describe new features` (коммит документации)
+    7.  `feat: make exit button red, make help button always accessible, and add broadcast IoB warning hint` (коммит изменений по цветам и кнопке справки)
+    8.  `build: auto-increment version to 1.1.31 after verification build` (коммит автоинкремента при тестовой сборке)
+    9.  `build: bump version to 1.1.33 for release` (коммит финальной версии релиза)
 *   Все изменения успешно отправлены в удаленный репозиторий GitHub (`git push` в ветку `master`).
