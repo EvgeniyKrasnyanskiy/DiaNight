@@ -47,6 +47,15 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def prefix = "DiaNight"
+            def version = variant.versionName
+            def type = variant.buildType.name
+            outputFileName = "${prefix}-v${version}-${type}.apk"
+        }
+    }
 }
 
 dependencies {
