@@ -154,7 +154,7 @@
                     android:id="@+id/btnSave"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Сохранить и выйти"
+                    android:text="Применить настройки"
                     android:textColor="@color/black"
                     android:backgroundTint="@color/colorPrimary"
                     android:textSize="14sp"
@@ -729,6 +729,22 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
+        <!-- Bottom Save Button -->
+        <Button
+            android:id="@+id/btnSaveBottom"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Сохранить и выйти"
+            android:textColor="@color/black"
+            android:backgroundTint="@color/colorPrimary"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            style="@style/Widget.MaterialComponents.Button"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"/>
+
         <!-- Footer / Version & Author Info -->
         <LinearLayout
             android:layout_width="match_parent"
@@ -749,11 +765,11 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Разработчик: Evgeniy Krasnyanskiy\nEmail: Evgeniy.Krasnyanskiy@gmail.com"
-                android:textColor="@color/text_secondary"
-                android:textSize="11sp"
+                android:layout_marginTop="4dp"
                 android:gravity="center"
-                android:layout_marginTop="4dp" />
+                android:text="Разработчик: Евгений Краснянский\nEmail: Evgeniy.Krasnyanskiy@gmail.com"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
 
         </LinearLayout>
 

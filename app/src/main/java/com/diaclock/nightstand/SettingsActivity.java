@@ -70,6 +70,7 @@ public class SettingsActivity extends AppCompatActivity {
     private Button btnTestRingtone;
 
     private Button btnSave;
+    private Button btnSaveBottom;
     private TextView tvVersionInfo;
 
     // State Variables
@@ -130,6 +131,7 @@ public class SettingsActivity extends AppCompatActivity {
         btnTestRingtone = findViewById(R.id.btnTestRingtone);
 
         btnSave = findViewById(R.id.btnSave);
+        btnSaveBottom = findViewById(R.id.btnSaveBottom);
         tvVersionInfo = findViewById(R.id.tvVersionInfo);
     }
 
@@ -187,6 +189,7 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void setupListeners() {
         btnSave.setOnClickListener(v -> saveSettings());
+        btnSaveBottom.setOnClickListener(v -> saveSettings());
         
         ivHelp.setOnClickListener(v -> showHelpDialog());
         btnTestConnection.setOnClickListener(v -> testConnection());
