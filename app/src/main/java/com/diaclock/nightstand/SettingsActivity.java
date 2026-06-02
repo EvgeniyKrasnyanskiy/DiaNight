@@ -30,6 +30,11 @@ import okhttp3.Callback;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import android.widget.CheckBox;
+import android.widget.RadioGroup;
+import android.widget.RadioButton;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
 
 public class SettingsActivity extends AppCompatActivity {
 
@@ -72,6 +77,20 @@ public class SettingsActivity extends AppCompatActivity {
     private Button btnSave;
     private Button btnSaveBottom;
     private TextView tvVersionInfo;
+    
+    // New UI Elements
+    private RadioGroup rgDataSource;
+    private RadioButton rbSourceNetwork;
+    private RadioButton rbSourceBroadcast;
+    private View cardCoreSetup;
+    
+    private CheckBox chkAutoCheckUpdates;
+    private Button btnCheckUpdate;
+    private Button btnDownloadUpdate;
+    private TextView tvUpdateStatus;
+    private Button btnCancelBottom;
+    
+    private String downloadUrl = null;
 
     // State Variables
     private int selectedColor = Color.WHITE;
@@ -133,6 +152,17 @@ public class SettingsActivity extends AppCompatActivity {
         btnSave = findViewById(R.id.btnSave);
         btnSaveBottom = findViewById(R.id.btnSaveBottom);
         tvVersionInfo = findViewById(R.id.tvVersionInfo);
+
+        rgDataSource = findViewById(R.id.rgDataSource);
+        rbSourceNetwork = findViewById(R.id.rbSourceNetwork);
+        rbSourceBroadcast = findViewById(R.id.rbSourceBroadcast);
+        cardCoreSetup = findViewById(R.id.cardCoreSetup);
+        
+        chkAutoCheckUpdates = findViewById(R.id.chkAutoCheckUpdates);
+        btnCheckUpdate = findViewById(R.id.btnCheckUpdate);
+        btnDownloadUpdate = findViewById(R.id.btnDownloadUpdate);
+        tvUpdateStatus = findViewById(R.id.tvUpdateStatus);
+        btnCancelBottom = findViewById(R.id.btnCancelBottom);
     }
 
     private void loadSavedSettings() {
@@ -166,6 +196,23 @@ public class SettingsActivity extends AppCompatActivity {
         } catch (Exception e) {
             tvVersionInfo.setText("Версия: 1.1");
         }
+
+        // Load new settings
+        String dataSource = prefs.getString("data_source", "network");
+        if ("broadcast".equals(dataSource)) {
+            rbSourceBroadcast.setChecked(true);
+            updateCoreSetupInteractivity(false);
+        } else {
+            rbSourceNetwork.setChecked(true);
+            updateCoreSetupInteractivity(true);
+        }
+
+        boolean autoCheck = prefs.getBoolean("auto_check_updates", true);
+        chkAutoCheckUpdates.setChecked(autoCheck);
+
+        if (autoCheck) {
+            checkForUpdates(true); // Silent check on load
+        }
     }
 
     private void resolveRingtoneNameDisplay() {
@@ -190,6 +237,23 @@ public class SettingsActivity extends AppCompatActivity {
     private void setupListeners() {
         btnSave.setOnClickListener(v -> saveSettings());
         btnSaveBottom.setOnClickListener(v -> saveSettings());
+        btnCancelBottom.setOnClickListener(v -> finish());
+        
+        rgDataSource.setOnCheckedChangeListener((group, checkedId) -> {
+            boolean isNetwork = checkedId == R.id.rbSourceNetwork;
+            updateCoreSetupInteractivity(isNetwork);
+        });
+
+        btnCheckUpdate.setOnClickListener(v -> checkForUpdates(false));
+        btnDownloadUpdate.setOnClickListener(v -> {
+            if (downloadUrl != null) {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl)));
+                } catch (Exception e) {
+                    Toast.makeText(this, "Не удалось открыть браузер", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
         
         ivHelp.setOnClickListener(v -> showHelpDialog());
         btnTestConnection.setOnClickListener(v -> testConnection());
@@ -381,7 +445,7 @@ public class SettingsActivity extends AppCompatActivity {
     private void saveSettings() {
         // 1. IP Validation
         String ip = etIpAddress.getText() != null ? etIpAddress.getText().toString().trim() : "";
-        if (ip.isEmpty()) {
+        if (rbSourceNetwork.isChecked() && ip.isEmpty()) {
             showToast(getString(R.string.msg_invalid_ip));
             return;
         }
@@ -456,9 +520,14 @@ public class SettingsActivity extends AppCompatActivity {
         }
 
         String apiSecret = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
+        
+        String dataSource = rbSourceNetwork.isChecked() ? "network" : "broadcast";
+        boolean autoCheck = chkAutoCheckUpdates.isChecked();
 
         // Save successfully
         SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
+        editor.putString("data_source", dataSource);
+        editor.putBoolean("auto_check_updates", autoCheck);
         editor.putString("ip_address", ip);
         editor.putString("api_secret", apiSecret);
         editor.putInt("toggle_interval", interval);
@@ -815,6 +884,159 @@ public class SettingsActivity extends AppCompatActivity {
         } catch (Exception e) {
             android.util.Log.e("DiaNightScan", "SHA-1 hashing failed: " + e.getMessage());
             return input;
+        }
+    }
+
+    private void updateCoreSetupInteractivity(boolean isNetwork) {
+        cardCoreSetup.setAlpha(isNetwork ? 1.0f : 0.5f);
+        etIpAddress.setEnabled(isNetwork);
+        etApiSecret.setEnabled(isNetwork);
+        btnTestConnection.setEnabled(isNetwork);
+        btnAutoSearchBeta.setEnabled(isNetwork);
+        ivHelp.setEnabled(isNetwork);
+        btnSave.setEnabled(isNetwork);
+    }
+
+    private void checkForUpdates(boolean silent) {
+        if (!silent) {
+            runOnUiThread(() -> tvUpdateStatus.setText("Проверка обновлений..."));
+        }
+        
+        String url = "https://api.github.com/repos/EvgeniyKrasnyanskiy/DiaNight/releases/latest";
+        
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", "DiaNight-App")
+                .build();
+                
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                .build();
+                
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                runOnUiThread(() -> {
+                    tvUpdateStatus.setText("Не удалось проверить обновления");
+                    if (!silent) {
+                        Toast.makeText(SettingsActivity.this, "Ошибка проверки обновлений", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (!response.isSuccessful()) {
+                    runOnUiThread(() -> {
+                        tvUpdateStatus.setText("Ошибка при проверке обновлений (код: " + response.code() + ")");
+                        if (!silent) {
+                            Toast.makeText(SettingsActivity.this, "Ошибка проверки: " + response.code(), Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                    response.close();
+                    return;
+                }
+                
+                String body = response.body() != null ? response.body().string() : "";
+                response.close();
+                
+                try {
+                    com.google.gson.JsonObject root = JsonParser.parseString(body).getAsJsonObject();
+                    String tagName = root.has("tag_name") ? root.get("tag_name").getAsString() : "";
+                    String htmlUrl = root.has("html_url") ? root.get("html_url").getAsString() : "";
+                    
+                    String apkUrl = htmlUrl;
+                    if (root.has("assets")) {
+                        JsonArray assets = root.getAsJsonArray("assets");
+                        for (int i = 0; i < assets.size(); i++) {
+                            com.google.gson.JsonObject asset = assets.get(i).getAsJsonObject();
+                            if (asset.has("name") && asset.get("name").getAsString().endsWith(".apk")) {
+                                if (asset.has("browser_download_url")) {
+                                    apkUrl = asset.get("browser_download_url").getAsString();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    final String remoteVer = tagName.startsWith("v") ? tagName.substring(1) : tagName;
+                    
+                    String localVerStr = "1.1.0";
+                    try {
+                        localVerStr = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+                    } catch (Exception e) {
+                        // ignore
+                    }
+                    
+                    final String localVer = localVerStr;
+                    final boolean isNewer = isVersionNewer(localVer, remoteVer);
+                    final String finalApkUrl = apkUrl;
+                    
+                    runOnUiThread(() -> {
+                        if (isNewer) {
+                            tvUpdateStatus.setText("Доступна новая версия: " + remoteVer + " (у вас: " + localVer + ")");
+                            btnDownloadUpdate.setVisibility(View.VISIBLE);
+                            downloadUrl = finalApkUrl;
+                            if (!silent) {
+                                new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                        .setTitle("Доступно обновление! 🎉")
+                                        .setMessage("Найдена новая версия приложения: " + remoteVer + ".\n\nЖелаете скачать обновление?")
+                                        .setPositiveButton("Скачать", (dialog, which) -> {
+                                            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(finalApkUrl)));
+                                        })
+                                        .setNegativeButton("Отмена", null)
+                                        .show();
+                                Toast.makeText(SettingsActivity.this, "Доступно обновление " + remoteVer, Toast.LENGTH_LONG).show();
+                            }
+                        } else {
+                            tvUpdateStatus.setText("Установлена актуальная версия: " + localVer);
+                            btnDownloadUpdate.setVisibility(View.GONE);
+                            if (!silent) {
+                                Toast.makeText(SettingsActivity.this, "У вас установлена последняя версия", Toast.LENGTH_SHORT).show();
+                            }
+                        }
+                    });
+                } catch (Exception e) {
+                    runOnUiThread(() -> {
+                        tvUpdateStatus.setText("Ошибка разбора ответа обновлений");
+                        if (!silent) {
+                            Toast.makeText(SettingsActivity.this, "Ошибка разбора ответа", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    private boolean isVersionNewer(String local, String remote) {
+        if (local == null || remote == null || local.isEmpty() || remote.isEmpty()) {
+            return false;
+        }
+        
+        String[] localParts = local.split("\\.");
+        String[] remoteParts = remote.split("\\.");
+        
+        int length = Math.max(localParts.length, remoteParts.length);
+        for (int i = 0; i < length; i++) {
+            int localVal = i < localParts.length ? parseVersionPart(localParts[i]) : 0;
+            int remoteVal = i < remoteParts.length ? parseVersionPart(remoteParts[i]) : 0;
+            
+            if (remoteVal > localVal) {
+                return true;
+            } else if (remoteVal < localVal) {
+                return false;
+            }
+        }
+        return false;
+    }
+    
+    private int parseVersionPart(String part) {
+        try {
+            String clean = part.replaceAll("[^0-9]", "");
+            return clean.isEmpty() ? 0 : Integer.parseInt(clean);
+        } catch (NumberFormatException e) {
+            return 0;
         }
     }
 
