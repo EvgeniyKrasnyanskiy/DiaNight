@@ -70,6 +70,7 @@ public class SettingsActivity extends AppCompatActivity {
     private Button btnTestRingtone;
 
     private Button btnSave;
+    private TextView tvVersionInfo;
 
     // State Variables
     private int selectedColor = Color.WHITE;
@@ -129,6 +130,7 @@ public class SettingsActivity extends AppCompatActivity {
         btnTestRingtone = findViewById(R.id.btnTestRingtone);
 
         btnSave = findViewById(R.id.btnSave);
+        tvVersionInfo = findViewById(R.id.tvVersionInfo);
     }
 
     private void loadSavedSettings() {
@@ -154,6 +156,14 @@ public class SettingsActivity extends AppCompatActivity {
         // Load and resolve chosen Ringtone Uri details
         selectedRingtoneUri = prefs.getString("alarm_uri", null);
         resolveRingtoneNameDisplay();
+
+        // Display actual application version dynamically from PackageInfo
+        try {
+            String versionName = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            tvVersionInfo.setText("Версия: " + versionName);
+        } catch (Exception e) {
+            tvVersionInfo.setText("Версия: 1.1");
+        }
     }
 
     private void resolveRingtoneNameDisplay() {
