@@ -83,6 +83,7 @@ public class SettingsActivity extends AppCompatActivity {
     private RadioButton rbSourceNetwork;
     private RadioButton rbSourceBroadcast;
     private View cardCoreSetup;
+    private TextView tvDataSourceHint;
     
     private CheckBox chkAutoCheckUpdates;
     private Button btnCheckUpdate;
@@ -157,6 +158,7 @@ public class SettingsActivity extends AppCompatActivity {
         rbSourceNetwork = findViewById(R.id.rbSourceNetwork);
         rbSourceBroadcast = findViewById(R.id.rbSourceBroadcast);
         cardCoreSetup = findViewById(R.id.cardCoreSetup);
+        tvDataSourceHint = findViewById(R.id.tvDataSourceHint);
         
         chkAutoCheckUpdates = findViewById(R.id.chkAutoCheckUpdates);
         btnCheckUpdate = findViewById(R.id.btnCheckUpdate);
@@ -202,9 +204,13 @@ public class SettingsActivity extends AppCompatActivity {
         if ("broadcast".equals(dataSource)) {
             rbSourceBroadcast.setChecked(true);
             updateCoreSetupInteractivity(false);
+            tvDataSourceHint.setText("Локальный режим работает без сети через встроенный обмен на одном телефоне. Внимание: при локальном обмене (Broadcast) значение активного инсулина (IoB) не передается и не отображается.");
+            tvDataSourceHint.setTextColor(getResources().getColor(R.color.color_warning_orange));
         } else {
             rbSourceNetwork.setChecked(true);
             updateCoreSetupInteractivity(true);
+            tvDataSourceHint.setText("Сетевой режим требует настройки IP-адреса и ключа API Secret. Локальный режим работает без сети через встроенный обмен на одном телефоне.");
+            tvDataSourceHint.setTextColor(getResources().getColor(R.color.text_secondary));
         }
 
         boolean autoCheck = prefs.getBoolean("auto_check_updates", true);
@@ -242,6 +248,13 @@ public class SettingsActivity extends AppCompatActivity {
         rgDataSource.setOnCheckedChangeListener((group, checkedId) -> {
             boolean isNetwork = checkedId == R.id.rbSourceNetwork;
             updateCoreSetupInteractivity(isNetwork);
+            if (isNetwork) {
+                tvDataSourceHint.setText("Сетевой режим требует настройки IP-адреса и ключа API Secret. Локальный режим работает без сети через встроенный обмен на одном телефоне.");
+                tvDataSourceHint.setTextColor(getResources().getColor(R.color.text_secondary));
+            } else {
+                tvDataSourceHint.setText("Локальный режим работает без сети через встроенный обмен на одном телефоне. Внимание: при локальном обмене (Broadcast) значение активного инсулина (IoB) не передается и не отображается.");
+                tvDataSourceHint.setTextColor(getResources().getColor(R.color.color_warning_orange));
+            }
         });
 
         btnCheckUpdate.setOnClickListener(v -> checkForUpdates(false));
@@ -893,7 +906,6 @@ public class SettingsActivity extends AppCompatActivity {
         etApiSecret.setEnabled(isNetwork);
         btnTestConnection.setEnabled(isNetwork);
         btnAutoSearchBeta.setEnabled(isNetwork);
-        ivHelp.setEnabled(isNetwork);
         btnSave.setEnabled(isNetwork);
     }
 

@@ -13,15 +13,36 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- Title -->
-        <TextView
-            android:layout_width="wrap_content"
+        <!-- Title and Help Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/title_settings"
-            android:textColor="@color/white"
-            android:textSize="24sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="24dp"/>
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="24dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/title_settings"
+                android:textColor="@color/white"
+                android:textSize="24sp"
+                android:textStyle="bold"/>
+
+            <!-- Help Manual Button -->
+            <ImageView
+                android:id="@+id/ivHelp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_help"
+                android:contentDescription="Help Manual"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:padding="10dp"
+                app:tint="@color/colorPrimary"/>
+        </LinearLayout>
 
         <!-- Data Source Card -->
         <androidx.cardview.widget.CardView
@@ -111,47 +132,24 @@
                     android:textSize="16sp"
                     android:layout_marginBottom="12dp"/>
 
-                <!-- IP Address Row with Help Icon -->
-                <LinearLayout
+                <!-- IP Address -->
+                <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:layout_marginBottom="12dp">
+                    android:hint="@string/label_ip_address"
+                    app:hintTextColor="@color/colorPrimary"
+                    app:boxStrokeColor="@color/colorPrimary"
+                    android:layout_marginBottom="12dp"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:layout_width="0dp"
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etIpAddress"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:hint="@string/label_ip_address"
-                        app:hintTextColor="@color/colorPrimary"
-                        app:boxStrokeColor="@color/colorPrimary"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etIpAddress"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="textUri"
-                            android:textColor="@color/text_primary"
-                            android:singleLine="true"/>
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <!-- Help Manual Button -->
-                    <ImageView
-                        android:id="@+id/ivHelp"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:src="@drawable/ic_help"
-                        android:contentDescription="Help Manual"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:padding="10dp"
-                        android:layout_marginStart="8dp"
-                        app:tint="@color/colorPrimary"/>
-
-                </LinearLayout>
+                        android:inputType="textUri"
+                        android:textColor="@color/text_primary"
+                        android:singleLine="true"/>
+                </com.google.android.material.textfield.TextInputLayout>
 
                 <!-- API Secret / Key -->
                 <com.google.android.material.textfield.TextInputLayout

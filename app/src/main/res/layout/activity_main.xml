@@ -114,7 +114,8 @@
             android:padding="10dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"/>
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:tint="@color/color_danger_red"/>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
