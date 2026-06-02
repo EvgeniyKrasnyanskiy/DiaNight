@@ -68,13 +68,16 @@
 *   Удалить нижнюю избыточную панель с `btnCancel` и старой `btnSave`.
 
 ### [MODIFY] [SettingsActivity.java](file:///h:/DiaNight/app/src/main/java/com/diaclock/nightstand/SettingsActivity.java)
-*   Обновить привязку `btnSave` в коде (она теперь выполняет роль «Сохранить и выйти»).
+*   Обновить привязку `btnSave` в коде (она теперь выполняет роль «Применить настройки» сверху).
+*   Добавить новую кнопку сохранения внизу `btnSaveBottom` («Сохранить и выйти») и связать её с методом `saveSettings()`.
 *   Внедрить проверку наличия секретного ключа в `startNetworkAutoDiscovery()` с показом предупреждающего диалога.
 *   Добавить автосохранение IP-адреса в `SharedPreferences` при успешном нахождении мастера.
 *   Восстановить в методе `initViews()` привязку полей управления мелодиями будильника (`tvRingtoneName`, `btnChooseRingtone`, `btnTestRingtone`).
 *   Добавить динамическое считывание версии приложения из `PackageInfo.versionName` в текстовое поле `tvVersionInfo`.
 
 ### [MODIFY] [activity_settings.xml](file:///h:/DiaNight/app/src/main/res/layout/activity_settings.xml)
+*   Изменить текст верхней кнопки `@id/btnSave` на «Применить настройки».
+*   Добавить новую кнопку `@id/btnSaveBottom` («Сохранить и выйти») в самый низ экрана прямо перед футером.
 *   Добавить в нижнюю часть разметки футер, содержащий текущую версию приложения и информацию о разработчике (Evgeniy Krasnyanskiy, Email).
 
 ---
