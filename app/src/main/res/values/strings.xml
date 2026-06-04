@@ -77,6 +77,7 @@
     <string name="msg_snoozed_manual">Alarm snoozed for %1$d min.</string>
     <string name="msg_alarm_warning">Warning! Glucose out of range! (Tap to snooze)</string>
     <string name="label_version">Version</string>
+    <string name="label_telegram_channel">Telegram Channel: @DiaKia</string>
     <string name="hint_source_broadcast">Local mode works without network via inter-app communication on a single phone. Note: during local broadcast, Active Insulin (IoB) is not transmitted or displayed.</string>
     <string name="hint_source_network">Network mode requires IP Address and API Secret configuration. Local mode works without network via inter-app communication on a single phone.</string>
     <string name="ringtone_silent">Silent 🔕</string>

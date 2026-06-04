@@ -990,13 +990,19 @@
                 android:textSize="12sp" />
 
             <TextView
+                android:id="@+id/tvTelegramLink"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="6dp"
                 android:gravity="center"
-                android:text="Разработчик: Евгений Краснянский\nEmail: Evgeniy.Krasnyanskiy@gmail.com"
-                android:textColor="@color/text_secondary"
-                android:textSize="11sp" />
+                android:text="@string/label_telegram_channel"
+                android:textColor="#24A1DE"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:clickable="true"
+                android:focusable="true"
+                android:padding="8dp"
+                android:background="?android:attr/selectableItemBackground" />
 
         </LinearLayout>
 

@@ -81,6 +81,7 @@ public class SettingsActivity extends AppCompatActivity {
     private Button btnSave;
     private Button btnSaveBottom;
     private TextView tvVersionInfo;
+    private TextView tvTelegramLink;
     
     // New UI Elements
     private RadioGroup rgDataSource;
@@ -161,6 +162,7 @@ public class SettingsActivity extends AppCompatActivity {
         btnSave = findViewById(R.id.btnSave);
         btnSaveBottom = findViewById(R.id.btnSaveBottom);
         tvVersionInfo = findViewById(R.id.tvVersionInfo);
+        tvTelegramLink = findViewById(R.id.tvTelegramLink);
 
         rgDataSource = findViewById(R.id.rgDataSource);
         rbSourceNetwork = findViewById(R.id.rbSourceNetwork);
@@ -342,6 +344,15 @@ public class SettingsActivity extends AppCompatActivity {
 
         // Test Alarm Button Trigger
         btnTestRingtone.setOnClickListener(v -> toggleTestAlarm());
+
+        // Open Telegram channel link
+        tvTelegramLink.setOnClickListener(v -> {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/DiaKia")));
+            } catch (Exception e) {
+                Toast.makeText(this, getString(R.string.err_open_browser), Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private void updateColor(int color) {
