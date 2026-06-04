@@ -170,7 +170,7 @@ public class MainActivity extends AppCompatActivity {
         } else {
             if ("broadcast".equals(dataSource)) {
                 registerXdripReceiver();
-                tvGlucose.setText("Ждем...");
+                tvGlucose.setText(getString(R.string.msg_waiting));
                 tvIoB.setVisibility(View.GONE);
             } else {
                 startNetworkPolling();
@@ -223,7 +223,7 @@ public class MainActivity extends AppCompatActivity {
                 if ("broadcast".equals(dataSource)) {
                     mainHandler.removeCallbacks(networkRunnable);
                     registerXdripReceiver();
-                    tvGlucose.setText("Ждем...");
+                    tvGlucose.setText(getString(R.string.msg_waiting));
                     tvIoB.setVisibility(View.GONE);
                 } else {
                     unregisterXdripReceiver();
@@ -358,8 +358,8 @@ public class MainActivity extends AppCompatActivity {
         // Silences alarms until epoch timestamp
         alarmSnoozeUntilTime = System.currentTimeMillis() + (snoozeMin * 60 * 1000L);
         String message = isAuto 
-            ? "Сигнал автоматически отложен на " + snoozeMin + " мин." 
-            : "Сигнал отложен на " + snoozeMin + " мин.";
+            ? getString(R.string.msg_snoozed_auto, snoozeMin) 
+            : getString(R.string.msg_snoozed_manual, snoozeMin);
         Toast.makeText(this, message, Toast.LENGTH_LONG).show();
     }
 
@@ -554,57 +554,68 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                if (!response.isSuccessful()) {
-                    runOnUiThread(() -> {
-                        showNetworkWarning(true);
-                        tvGlucose.setText("---");
-                        tvIoB.setVisibility(View.GONE);
-                        adjustGlucoseAndIoBTextSizes();
-                        applyTextColor();
-                    });
-                    return;
-                }
-
-                String responseBody = response.body() != null ? response.body().string() : "";
                 try {
-                    JsonElement element = JsonParser.parseString(responseBody);
-                    int sgv = 0;
-                    String direction = "";
-                    
-                    if (element.isJsonArray()) {
-                        JsonArray array = element.getAsJsonArray();
-                        if (array.size() > 0) {
-                            com.google.gson.JsonObject obj = array.get(0).getAsJsonObject();
+                    if (!response.isSuccessful()) {
+                        runOnUiThread(() -> {
+                            showNetworkWarning(true);
+                            tvGlucose.setText("---");
+                            tvIoB.setVisibility(View.GONE);
+                            adjustGlucoseAndIoBTextSizes();
+                            applyTextColor();
+                        });
+                        return;
+                    }
+
+                    String responseBody = response.body() != null ? response.body().string() : "";
+                    try {
+                        JsonElement element = JsonParser.parseString(responseBody);
+                        int sgv = 0;
+                        String direction = "";
+                        
+                        if (element.isJsonArray()) {
+                            JsonArray array = element.getAsJsonArray();
+                            if (array.size() > 0) {
+                                com.google.gson.JsonObject obj = array.get(0).getAsJsonObject();
+                                sgv = obj.get("sgv").getAsInt();
+                                if (obj.has("direction")) {
+                                    direction = obj.get("direction").getAsString();
+                                }
+                            }
+                        } else if (element.isJsonObject()) {
+                            com.google.gson.JsonObject obj = element.getAsJsonObject();
                             sgv = obj.get("sgv").getAsInt();
                             if (obj.has("direction")) {
                                 direction = obj.get("direction").getAsString();
                             }
                         }
-                    } else if (element.isJsonObject()) {
-                        com.google.gson.JsonObject obj = element.getAsJsonObject();
-                        sgv = obj.get("sgv").getAsInt();
-                        if (obj.has("direction")) {
-                            direction = obj.get("direction").getAsString();
-                        }
-                    }
 
-                    if (sgv > 0) {
-                        final double glucoseMmol = sgv / 18.0;
-                        lastGlucoseMmol = glucoseMmol;
-                        final String finalDirection = direction;
-                        lastDirection = direction;
-                        
-                        runOnUiThread(() -> {
-                            showNetworkWarning(false);
-                            tvGlucose.setText(String.format(Locale.US, "%.1f%s", glucoseMmol, getTrendArrow(finalDirection)));
-                            adjustGlucoseAndIoBTextSizes();
-                            applyTextColor();
-                            checkAlarms(glucoseMmol);
-                        });
-                        
-                        // Fetch IoB from the separate /pebble endpoint
-                        fetchIoBData();
-                    } else {
+                        if (sgv > 0) {
+                            final double glucoseMmol = sgv / 18.0;
+                            lastGlucoseMmol = glucoseMmol;
+                            final String finalDirection = direction;
+                            lastDirection = direction;
+                            
+                            runOnUiThread(() -> {
+                                showNetworkWarning(false);
+                                tvGlucose.setText(String.format(Locale.US, "%.1f%s", glucoseMmol, getTrendArrow(finalDirection)));
+                                adjustGlucoseAndIoBTextSizes();
+                                applyTextColor();
+                                checkAlarms(glucoseMmol);
+                            });
+                            
+                            // Fetch IoB from the separate /pebble endpoint
+                            fetchIoBData();
+                        } else {
+                            runOnUiThread(() -> {
+                                showNetworkWarning(true);
+                                tvGlucose.setText("---");
+                                tvIoB.setVisibility(View.GONE);
+                                adjustGlucoseAndIoBTextSizes();
+                                applyTextColor();
+                            });
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Parsing SGV JSON failed: " + e.getMessage());
                         runOnUiThread(() -> {
                             showNetworkWarning(true);
                             tvGlucose.setText("---");
@@ -613,15 +624,8 @@ public class MainActivity extends AppCompatActivity {
                             applyTextColor();
                         });
                     }
-                } catch (Exception e) {
-                    Log.e(TAG, "Parsing SGV JSON failed: " + e.getMessage());
-                    runOnUiThread(() -> {
-                        showNetworkWarning(true);
-                        tvGlucose.setText("---");
-                        tvIoB.setVisibility(View.GONE);
-                        adjustGlucoseAndIoBTextSizes();
-                        applyTextColor();
-                    });
+                } finally {
+                    response.close();
                 }
             }
         });
@@ -651,64 +655,68 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                if (!response.isSuccessful()) {
-                    runOnUiThread(() -> tvIoB.setVisibility(View.GONE));
-                    return;
-                }
-
-                String body = response.body() != null ? response.body().string() : "";
-                Log.d(TAG, "Pebble raw response (first 500 chars): " + body.substring(0, Math.min(body.length(), 500)));
                 try {
-                    com.google.gson.JsonObject root = JsonParser.parseString(body).getAsJsonObject();
-                    double iobValue = -1.0;
-                    
-                    // Parse IoB from: {"bgs":[{"iob":"0,64",...}]} (Standard Nightscout Pebble format in xDrip+)
-                    if (root.has("bgs")) {
-                        JsonArray bgsArray = root.getAsJsonArray("bgs");
-                        if (bgsArray.size() > 0) {
-                            com.google.gson.JsonObject bgsObj = bgsArray.get(0).getAsJsonObject();
-                            if (bgsObj.has("iob")) {
-                                iobValue = parseIobElement(bgsObj.get("iob"));
-                            }
-                        }
+                    if (!response.isSuccessful()) {
+                        runOnUiThread(() -> tvIoB.setVisibility(View.GONE));
+                        return;
                     }
-                    
-                    // Fallback to: {"status":[{"iob":{"iob":1.25,...}}]}
-                    if (iobValue < 0 && root.has("status")) {
-                        JsonArray statusArray = root.getAsJsonArray("status");
-                        if (statusArray.size() > 0) {
-                            com.google.gson.JsonObject statusObj = statusArray.get(0).getAsJsonObject();
-                            if (statusObj.has("iob")) {
-                                JsonElement statusIobElement = statusObj.get("iob");
-                                if (statusIobElement.isJsonObject()) {
-                                    com.google.gson.JsonObject iobObj = statusIobElement.getAsJsonObject();
-                                    if (iobObj.has("iob")) {
-                                        iobValue = parseIobElement(iobObj.get("iob"));
-                                    }
-                                } else {
-                                    iobValue = parseIobElement(statusIobElement);
+
+                    String body = response.body() != null ? response.body().string() : "";
+                    Log.d(TAG, "Pebble raw response (first 500 chars): " + body.substring(0, Math.min(body.length(), 500)));
+                    try {
+                        com.google.gson.JsonObject root = JsonParser.parseString(body).getAsJsonObject();
+                        double iobValue = -1.0;
+                        
+                        // Parse IoB from: {"bgs":[{"iob":"0,64",...}]} (Standard Nightscout Pebble format in xDrip+)
+                        if (root.has("bgs")) {
+                            JsonArray bgsArray = root.getAsJsonArray("bgs");
+                            if (bgsArray.size() > 0) {
+                                com.google.gson.JsonObject bgsObj = bgsArray.get(0).getAsJsonObject();
+                                if (bgsObj.has("iob")) {
+                                    iobValue = parseIobElement(bgsObj.get("iob"));
                                 }
                             }
                         }
-                    }
-                    
-                    final double finalIob = iobValue;
-                    runOnUiThread(() -> {
-                        if (finalIob >= 0) {
-                            tvIoB.setText(String.format(Locale.US, "%.2f", finalIob));
-                            tvIoB.setVisibility(View.VISIBLE);
-                            Log.d(TAG, "IoB displayed: " + finalIob);
-                        } else {
-                            tvIoB.setVisibility(View.GONE);
+                        
+                        // Fallback to: {"status":[{"iob":{"iob":1.25,...}}]}
+                        if (iobValue < 0 && root.has("status")) {
+                            JsonArray statusArray = root.getAsJsonArray("status");
+                            if (statusArray.size() > 0) {
+                                com.google.gson.JsonObject statusObj = statusArray.get(0).getAsJsonObject();
+                                if (statusObj.has("iob")) {
+                                    JsonElement statusIobElement = statusObj.get("iob");
+                                    if (statusIobElement.isJsonObject()) {
+                                        com.google.gson.JsonObject iobObj = statusIobElement.getAsJsonObject();
+                                        if (iobObj.has("iob")) {
+                                            iobValue = parseIobElement(iobObj.get("iob"));
+                                        }
+                                    } else {
+                                        iobValue = parseIobElement(statusIobElement);
+                                    }
+                                }
+                            }
                         }
-                        adjustGlucoseAndIoBTextSizes();
-                    });
-                } catch (Exception e) {
-                    Log.e(TAG, "Parsing Pebble IoB failed: " + e.getMessage());
-                    runOnUiThread(() -> {
-                        tvIoB.setVisibility(View.GONE);
-                        adjustGlucoseAndIoBTextSizes();
-                    });
+                        
+                        final double finalIob = iobValue;
+                        runOnUiThread(() -> {
+                            if (finalIob >= 0) {
+                                tvIoB.setText(String.format(Locale.US, "%.2f", finalIob));
+                                tvIoB.setVisibility(View.VISIBLE);
+                                Log.d(TAG, "IoB displayed: " + finalIob);
+                            } else {
+                                tvIoB.setVisibility(View.GONE);
+                            }
+                            adjustGlucoseAndIoBTextSizes();
+                        });
+                    } catch (Exception e) {
+                        Log.e(TAG, "Parsing Pebble IoB failed: " + e.getMessage());
+                        runOnUiThread(() -> {
+                            tvIoB.setVisibility(View.GONE);
+                            adjustGlucoseAndIoBTextSizes();
+                        });
+                    }
+                } finally {
+                    response.close();
                 }
             }
         });
@@ -850,7 +858,7 @@ public class MainActivity extends AppCompatActivity {
                 mainHandler.removeCallbacks(autoSnoozeRunnable);
                 mainHandler.postDelayed(autoSnoozeRunnable, MAX_ALARM_DURATION_MS);
                 
-                Toast.makeText(this, "Внимание! Сахар вышел из нормы! (Тапните для откладывания)", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, getString(R.string.msg_alarm_warning), Toast.LENGTH_LONG).show();
             } catch (Exception e) {
                 Log.e(TAG, "Playing alarm sound failed: " + e.getMessage());
             }
