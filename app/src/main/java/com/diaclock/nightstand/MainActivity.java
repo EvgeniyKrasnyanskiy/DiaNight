@@ -201,6 +201,7 @@ public class MainActivity extends AppCompatActivity {
             // Unregister/Stop monitoring to save battery
             unregisterXdripReceiver();
             mainHandler.removeCallbacks(networkRunnable);
+            mainHandler.removeCallbacks(toggleRunnable);
             
             // Adjust layouts and icons
             layoutGlucose.setVisibility(View.GONE);
@@ -215,6 +216,11 @@ public class MainActivity extends AppCompatActivity {
                 ivNetworkWarning.setVisibility(View.VISIBLE);
             } else {
                 ivNetworkWarning.setVisibility(View.GONE);
+            }
+            
+            // If nightlight mode was previously active and is now disabled, restart the toggle cycle
+            if (oldNightlight) {
+                startToggleCycle();
             }
             
             // Resume/Start polling or broadcast receiver if needed
@@ -463,29 +469,36 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // 3. Central view toggling Handler
-    private void startToggleCycle() {
-        Runnable toggleRunnable = new Runnable() {
-            @Override
-            public void run() {
-                if (nightlightMode) {
-                    isShowingTime = true;
-                    layoutGlucose.setVisibility(View.GONE);
-                    layoutTime.setVisibility(View.VISIBLE);
-                } else {
-                    isShowingTime = !isShowingTime;
-                    if (isShowingTime) {
-                        layoutGlucose.setVisibility(View.GONE);
-                        layoutTime.setVisibility(View.VISIBLE);
-                    } else {
-                        layoutTime.setVisibility(View.GONE);
-                        layoutGlucose.setVisibility(View.VISIBLE);
-                        applyTextColor();
-                    }
-                }
-
-                mainHandler.postDelayed(this, toggleIntervalSeconds * 1000L);
+    private final Runnable toggleRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (nightlightMode) {
+                isShowingTime = true;
+                layoutGlucose.setVisibility(View.GONE);
+                layoutTime.setVisibility(View.VISIBLE);
+                return;
             }
-        };
+            isShowingTime = !isShowingTime;
+            if (isShowingTime) {
+                layoutGlucose.setVisibility(View.GONE);
+                layoutTime.setVisibility(View.VISIBLE);
+            } else {
+                layoutTime.setVisibility(View.GONE);
+                layoutGlucose.setVisibility(View.VISIBLE);
+                applyTextColor();
+            }
+            mainHandler.postDelayed(this, toggleIntervalSeconds * 1000L);
+        }
+    };
+
+    private void startToggleCycle() {
+        mainHandler.removeCallbacks(toggleRunnable);
+        if (nightlightMode) {
+            isShowingTime = true;
+            layoutGlucose.setVisibility(View.GONE);
+            layoutTime.setVisibility(View.VISIBLE);
+            return;
+        }
         mainHandler.postDelayed(toggleRunnable, toggleIntervalSeconds * 1000L);
     }
 
