@@ -41,10 +41,20 @@ public class TelemetryTracker {
 
     public static void trackInstall(final Context context) {
         final SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        boolean isTracked = prefs.getBoolean(KEY_TRACKED, false);
+        
+        // Get app version first
+        String versionName = "unknown";
+        try {
+            versionName = context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to resolve version name: " + e.getMessage());
+        }
+
+        final String versionKey = KEY_TRACKED + "_" + versionName;
+        boolean isTracked = prefs.getBoolean(versionKey, false);
         
         if (isTracked) {
-            Log.d(TAG, "Install telemetry already sent previously.");
+            Log.d(TAG, "Install telemetry already sent previously for version: " + versionName);
             return;
         }
 
@@ -80,14 +90,6 @@ public class TelemetryTracker {
             }
         }
 
-        // Get app version
-        String versionName = "unknown";
-        try {
-            versionName = context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName;
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to resolve version name: " + e.getMessage());
-        }
-
         // Get device model
         String deviceName = Build.MANUFACTURER + " " + Build.MODEL;
 
@@ -109,18 +111,27 @@ public class TelemetryTracker {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 Log.e(TAG, "Failed to send telemetry to Google Form: " + e.getMessage());
-                // Leave KEY_TRACKED = false to retry on next launch
             }
 
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                if (response.isSuccessful()) {
-                    Log.d(TAG, "Install telemetry sent to Google Form successfully.");
-                    prefs.edit().putBoolean(KEY_TRACKED, true).apply();
-                } else {
-                    Log.e(TAG, "Google Form returned error code: " + response.code());
+                try {
+                    if (response.isSuccessful() && response.body() != null) {
+                        String responseBody = response.body().string();
+                        // Google Forms confirmation pages contain confirmation indicators
+                        if (responseBody.contains("recorded") || responseBody.contains("записан") || responseBody.contains("formResponse")) {
+                            Log.d(TAG, "Install telemetry recorded in Google Form successfully.");
+                            prefs.edit().putBoolean(versionKey, true).apply();
+                        } else {
+                            Log.e(TAG, "Google Form returned 200 OK but response body lacks confirmation. Body preview: " + 
+                                    responseBody.substring(0, Math.min(responseBody.length(), 200)));
+                        }
+                    } else {
+                        Log.e(TAG, "Google Form returned error code: " + response.code());
+                    }
+                } finally {
+                    response.close();
                 }
-                response.close();
             }
         });
     }
