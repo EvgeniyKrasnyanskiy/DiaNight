@@ -102,6 +102,7 @@ public class MainActivity extends AppCompatActivity {
     private int toggleIntervalSeconds = 5;
     private String dataSource = "network";
     private boolean isReceiverRegistered = false;
+    private boolean nightlightMode = false;
     
     // Network variables
     private final OkHttpClient httpClient = new OkHttpClient();
@@ -153,17 +154,27 @@ public class MainActivity extends AppCompatActivity {
         loadSettings();
         setupListeners();
 
+        // Track installation analytics
+        TelemetryTracker.trackInstall(this);
+
         // Start tasks
         startTimeUpdates();
         startBreathingAnimation();
         startToggleCycle();
         
-        if ("broadcast".equals(dataSource)) {
-            registerXdripReceiver();
-            tvGlucose.setText("Ждем...");
-            tvIoB.setVisibility(View.GONE);
+        if (nightlightMode) {
+            layoutGlucose.setVisibility(View.GONE);
+            layoutTime.setVisibility(View.VISIBLE);
+            ivAlarmBell.setVisibility(View.GONE);
+            ivNetworkWarning.setVisibility(View.GONE);
         } else {
-            startNetworkPolling();
+            if ("broadcast".equals(dataSource)) {
+                registerXdripReceiver();
+                tvGlucose.setText("Ждем...");
+                tvIoB.setVisibility(View.GONE);
+            } else {
+                startNetworkPolling();
+            }
         }
         
         // Register battery monitor
@@ -181,29 +192,52 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         String oldSource = dataSource;
+        boolean oldNightlight = nightlightMode;
         loadSettings();
         updateAlarmBellIcon();
         applyTextColor();
         
-        if (!dataSource.equals(oldSource)) {
-            Log.d(TAG, "Data source changed from " + oldSource + " to " + dataSource);
-            if ("broadcast".equals(dataSource)) {
-                mainHandler.removeCallbacks(networkRunnable);
-                registerXdripReceiver();
-                tvGlucose.setText("Ждем...");
-                tvIoB.setVisibility(View.GONE);
-            } else {
-                unregisterXdripReceiver();
-                mainHandler.removeCallbacks(networkRunnable);
-                mainHandler.post(networkRunnable);
-            }
+        if (nightlightMode) {
+            // Unregister/Stop monitoring to save battery
+            unregisterXdripReceiver();
+            mainHandler.removeCallbacks(networkRunnable);
+            
+            // Adjust layouts and icons
+            layoutGlucose.setVisibility(View.GONE);
+            layoutTime.setVisibility(View.VISIBLE);
+            ivAlarmBell.setVisibility(View.GONE);
+            ivNetworkWarning.setVisibility(View.GONE);
+            stopAlarmSound();
         } else {
-            if ("broadcast".equals(dataSource)) {
-                registerXdripReceiver();
+            // Restore alarm bell visibility (warning only if there is a network error)
+            ivAlarmBell.setVisibility(View.VISIBLE);
+            if (hasConnectionError) {
+                ivNetworkWarning.setVisibility(View.VISIBLE);
             } else {
-                unregisterXdripReceiver();
-                mainHandler.removeCallbacks(networkRunnable);
-                mainHandler.post(networkRunnable);
+                ivNetworkWarning.setVisibility(View.GONE);
+            }
+            
+            // Resume/Start polling or broadcast receiver if needed
+            if (!dataSource.equals(oldSource) || oldNightlight) {
+                Log.d(TAG, "Data source or nightlight mode changed");
+                if ("broadcast".equals(dataSource)) {
+                    mainHandler.removeCallbacks(networkRunnable);
+                    registerXdripReceiver();
+                    tvGlucose.setText("Ждем...");
+                    tvIoB.setVisibility(View.GONE);
+                } else {
+                    unregisterXdripReceiver();
+                    mainHandler.removeCallbacks(networkRunnable);
+                    mainHandler.post(networkRunnable);
+                }
+            } else {
+                if ("broadcast".equals(dataSource)) {
+                    registerXdripReceiver();
+                } else {
+                    unregisterXdripReceiver();
+                    mainHandler.removeCallbacks(networkRunnable);
+                    mainHandler.post(networkRunnable);
+                }
             }
         }
         
@@ -261,6 +295,7 @@ public class MainActivity extends AppCompatActivity {
         alarmEnabled = prefs.getBoolean("alarm_enabled", true);
         textColor = prefs.getInt("text_color", Color.WHITE);
         dataSource = prefs.getString("data_source", "network");
+        nightlightMode = prefs.getBoolean("nightlight_mode", false);
     }
 
     private void setupListeners() {
@@ -432,15 +467,20 @@ public class MainActivity extends AppCompatActivity {
         Runnable toggleRunnable = new Runnable() {
             @Override
             public void run() {
-                isShowingTime = !isShowingTime;
-                
-                if (isShowingTime) {
+                if (nightlightMode) {
+                    isShowingTime = true;
                     layoutGlucose.setVisibility(View.GONE);
                     layoutTime.setVisibility(View.VISIBLE);
                 } else {
-                    layoutTime.setVisibility(View.GONE);
-                    layoutGlucose.setVisibility(View.VISIBLE);
-                    applyTextColor();
+                    isShowingTime = !isShowingTime;
+                    if (isShowingTime) {
+                        layoutGlucose.setVisibility(View.GONE);
+                        layoutTime.setVisibility(View.VISIBLE);
+                    } else {
+                        layoutTime.setVisibility(View.GONE);
+                        layoutGlucose.setVisibility(View.VISIBLE);
+                        applyTextColor();
+                    }
                 }
 
                 mainHandler.postDelayed(this, toggleIntervalSeconds * 1000L);
@@ -699,7 +739,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void showNetworkWarning(boolean error) {
         hasConnectionError = error;
-        if (error) {
+        if (error && !nightlightMode) {
             ivNetworkWarning.setVisibility(View.VISIBLE);
         } else {
             ivNetworkWarning.setVisibility(View.GONE);
@@ -708,7 +748,7 @@ public class MainActivity extends AppCompatActivity {
 
     // 5. Intelligent Multi-time Slot Alarms with Snooze & Auto-resets
     private void checkAlarms(double glucoseVal) {
-        if (!alarmEnabled) {
+        if (!alarmEnabled || nightlightMode) {
             stopAlarmSound();
             return;
         }

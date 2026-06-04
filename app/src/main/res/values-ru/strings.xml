@@ -1,0 +1,73 @@
+<resources>
+    <string name="app_name">DiaNight</string>
+    <string name="title_settings">Настройки DiaNight</string>
+    
+    <!-- Settings Screen Labels -->
+    <string name="label_ip_address">IP-адрес xDrip+ / Nightscout</string>
+    <string name="hint_ip_address">например, 192.168.0.111</string>
+    
+    <string name="label_api_secret">Секретный ключ (API Secret)</string>
+    <string name="hint_api_secret">Введите API-ключ xDrip</string>
+    
+    <string name="label_toggle_interval">Интервал переключения (секунды)</string>
+    <string name="hint_toggle_interval">По умолчанию: 5</string>
+    
+    <string name="label_day_time_range">Временные рамки Дня</string>
+    <string name="label_day_start">Начало дня (ЧЧ:мм)</string>
+    <string name="label_day_end">Конец дня / Начало ночи (ЧЧ:мм)</string>
+    
+    <string name="label_day_thresholds">Дневные пороги сахара (ммоль/л)</string>
+    <string name="label_night_thresholds">Ночные пороги сахара (ммоль/л)</string>
+    
+    <string name="label_high_threshold">Верхний порог (High)</string>
+    <string name="label_low_threshold">Нижний порог (Low)</string>
+    
+    <!-- Text Color Section -->
+    <string name="label_text_color">Цвет текста ночника</string>
+    <string name="color_white">Белый</string>
+    <string name="color_grey">Серый</string>
+    <string name="color_dark_grey">Т.-серый</string>
+    <string name="color_green">Зеленый</string>
+    <string name="color_blue">Синий</string>
+    <string name="btn_custom_color">Свой цвет</string>
+    <string name="dialog_color_title">Подбор цвета (RGB)</string>
+    <string name="label_red">Красный</string>
+    <string name="label_green_slider">Зеленый</string>
+    <string name="label_blue_slider">Синий</string>
+    
+    <!-- Alarm Ringtone Section -->
+    <string name="label_alarm_sound">Сигнал тревоги</string>
+    <string name="btn_choose_ringtone">Выбрать мелодию</string>
+    <string name="btn_test_alarm_start">Проверить</string>
+    <string name="btn_test_alarm_stop">Остановить тест</string>
+    <string name="default_ringtone_name">Сигнал по умолчанию 🔔</string>
+    
+    <!-- Snooze Alarm Section -->
+    <string name="label_snooze_interval">Время откладывания тревоги (минут)</string>
+    <string name="hint_snooze_interval">По умолчанию: 60</string>
+    <string name="msg_invalid_snooze">Интервал откладывания должен быть не менее 1 минуты</string>
+    
+    <string name="btn_save">Сохранить</string>
+    <string name="btn_cancel">Отмена</string>
+    
+    <!-- Toast & Validation Messages -->
+    <string name="msg_invalid_ip">Пожалуйста, введите корректный IP-адрес</string>
+    <string name="msg_invalid_interval">Интервал переключения должен быть не менее 1 секунды</string>
+    <string name="msg_invalid_thresholds">Верхний порог сахара должен быть больше нижнего</string>
+    <string name="msg_invalid_time_format">Введите время в формате ЧЧ:мм (например, 08:00)</string>
+    <string name="msg_saved">Настройки успешно сохранены</string>
+    
+    <!-- Alarm Hints -->
+    <string name="hint_bell_active">Звуковой сигнал включен 🔔</string>
+    <string name="hint_bell_disabled">Звуковой сигнал выключен 🔕</string>
+
+    <!-- New Settings for Interface & Language -->
+    <string name="label_interface_and_language">Интерфейс и Язык</string>
+    <string name="label_app_language">Язык приложения</string>
+    <string name="label_nightlight_mode">Режим ночника (скрыть сахара)</string>
+    
+    <!-- Spinner language options -->
+    <string name="lang_system">Автоматически (системный)</string>
+    <string name="lang_ru">Русский (Russian)</string>
+    <string name="lang_en">English (Английский)</string>
+</resources>

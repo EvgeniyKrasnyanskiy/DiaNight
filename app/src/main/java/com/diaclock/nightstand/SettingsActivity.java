@@ -33,6 +33,10 @@ import okhttp3.Response;
 import android.widget.CheckBox;
 import android.widget.RadioGroup;
 import android.widget.RadioButton;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
+import androidx.core.os.LocaleListCompat;
+import androidx.appcompat.app.AppCompatDelegate;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonParser;
 
@@ -90,6 +94,9 @@ public class SettingsActivity extends AppCompatActivity {
     private Button btnDownloadUpdate;
     private TextView tvUpdateStatus;
     private Button btnCancelBottom;
+    
+    private CheckBox chkNightlightMode;
+    private Spinner spAppLanguage;
     
     private String downloadUrl = null;
 
@@ -165,6 +172,9 @@ public class SettingsActivity extends AppCompatActivity {
         btnDownloadUpdate = findViewById(R.id.btnDownloadUpdate);
         tvUpdateStatus = findViewById(R.id.tvUpdateStatus);
         btnCancelBottom = findViewById(R.id.btnCancelBottom);
+
+        chkNightlightMode = findViewById(R.id.chkNightlightMode);
+        spAppLanguage = findViewById(R.id.spAppLanguage);
     }
 
     private void loadSavedSettings() {
@@ -215,6 +225,36 @@ public class SettingsActivity extends AppCompatActivity {
 
         boolean autoCheck = prefs.getBoolean("auto_check_updates", true);
         chkAutoCheckUpdates.setChecked(autoCheck);
+
+        // Load new nightlight mode and language preferences
+        chkNightlightMode.setChecked(prefs.getBoolean("nightlight_mode", false));
+
+        String[] languages = {
+                getString(R.string.lang_system),
+                getString(R.string.lang_ru),
+                getString(R.string.lang_en)
+        };
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_item,
+                languages
+        );
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spAppLanguage.setAdapter(adapter);
+
+        LocaleListCompat currentLocales = AppCompatDelegate.getApplicationLocales();
+        if (currentLocales.isEmpty()) {
+            spAppLanguage.setSelection(0); // System Default
+        } else {
+            String lang = currentLocales.get(0).getLanguage();
+            if ("ru".equals(lang)) {
+                spAppLanguage.setSelection(1);
+            } else if ("en".equals(lang)) {
+                spAppLanguage.setSelection(2);
+            } else {
+                spAppLanguage.setSelection(0);
+            }
+        }
 
         if (autoCheck) {
             checkForUpdates(true); // Silent check on load
@@ -536,11 +576,13 @@ public class SettingsActivity extends AppCompatActivity {
         
         String dataSource = rbSourceNetwork.isChecked() ? "network" : "broadcast";
         boolean autoCheck = chkAutoCheckUpdates.isChecked();
+        boolean nightlightMode = chkNightlightMode.isChecked();
 
         // Save successfully
         SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
         editor.putString("data_source", dataSource);
         editor.putBoolean("auto_check_updates", autoCheck);
+        editor.putBoolean("nightlight_mode", nightlightMode);
         editor.putString("ip_address", ip);
         editor.putString("api_secret", apiSecret);
         editor.putInt("toggle_interval", interval);
@@ -554,6 +596,21 @@ public class SettingsActivity extends AppCompatActivity {
         editor.putString("alarm_uri", selectedRingtoneUri);
         editor.putInt("snooze_interval", snoozeInterval);
         editor.apply();
+
+        int selectedLangPos = spAppLanguage.getSelectedItemPosition();
+        String targetLangCode = "";
+        if (selectedLangPos == 1) {
+            targetLangCode = "ru";
+        } else if (selectedLangPos == 2) {
+            targetLangCode = "en";
+        }
+
+        LocaleListCompat currentLocales2 = AppCompatDelegate.getApplicationLocales();
+        String activeLangCode = currentLocales2.isEmpty() ? "" : currentLocales2.get(0).getLanguage();
+
+        if (!targetLangCode.equals(activeLangCode)) {
+            AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(targetLangCode));
+        }
 
         Toast.makeText(this, getString(R.string.msg_saved), Toast.LENGTH_SHORT).show();
         finish();

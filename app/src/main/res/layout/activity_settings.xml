@@ -274,6 +274,62 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
+        <!-- Interface & Language Card -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/bg_card"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_interface_and_language"
+                    android:textColor="@color/colorPrimary"
+                    android:textStyle="bold"
+                    android:textSize="16sp"
+                    android:layout_marginBottom="12dp"/>
+
+                <!-- App Language Spinner Label -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_app_language"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp"
+                    android:layout_marginBottom="6dp"/>
+
+                <!-- Spinner -->
+                <Spinner
+                    android:id="@+id/spAppLanguage"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:backgroundTint="@color/colorPrimary"
+                    android:spinnerMode="dropdown"
+                    android:layout_marginBottom="16dp"/>
+
+                <!-- Nightlight Mode CheckBox -->
+                <CheckBox
+                    android:id="@+id/chkNightlightMode"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_nightlight_mode"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/colorPrimary"
+                    android:textSize="14sp"/>
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
         <!-- Text Color Card -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
