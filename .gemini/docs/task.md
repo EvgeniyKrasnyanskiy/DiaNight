@@ -1,8 +1,21 @@
-# Чек-лист реализации
-
-- [x] Исправить локализацию (замена захардкоженных строк на getString(R.string...)) в [SettingsActivity.java](file:///h:/DiaNight/app/src/main/java/com/diaclock/nightstand/SettingsActivity.java)
-- [x] Закрыть HTTP-утечки в [MainActivity.java](file:///h:/DiaNight/app/src/main/java/com/diaclock/nightstand/MainActivity.java) (`fetchGlucoseData` и `fetchIoBData`)
-- [x] Повысить надежность отправки телеметрии в [TelemetryTracker.java](file:///h:/DiaNight/app/src/main/java/com/diaclock/nightstand/TelemetryTracker.java) (проверка ответа и версионирование ключа запуска)
-- [x] Оптимизировать таймер ночника `startToggleCycle()` в [MainActivity.java](file:///h:/DiaNight/app/src/main/java/com/diaclock/nightstand/MainActivity.java)
-- [x] Проверить сборку проекта через `./gradlew assembleDebug`
-- [x] Зафиксировать изменения в Git (Conventional Commits) и выполнить `git push`
+- [x] Создать и настроить HttpClientProvider.java
+- [x] Оптимизировать CryptoUtils.java (SHA-1 хэширование через char[] и UTF-8)
+- [x] Интегрировать HttpClientProvider во все сетевые вызовы (MainActivity, SettingsActivity, TelemetryTracker)
+- [x] Модифицировать activity_main.xml (добавить viewFlashlightOverlay)
+- [x] Обновить strings.xml (RU и EN) (добавить описание фонарика по двойному тапу в справку)
+- [x] Реализовать логику в MainActivity.java:
+    - [x] Добавить volatile к networkPollInterval
+    - [x] Реализовать освобождение mediaPlayer в startAlarmSound() при исключениях
+    - [x] Реализовать pause/resume для breathingAnimator в onPause/onResume
+    - [x] Зарегистрировать batteryReceiver с RECEIVER_NOT_EXPORTED
+    - [x] Реализовать onConfigurationChanged для адаптации размеров шрифта на ходу
+    - [x] Заменить getMetrics() на getResources().getDisplayMetrics()
+    - [x] Реализовать логику экранного фонарика по двойному тапу с плавной регулировкой яркости (750 мс)
+- [x] Реализовать логику в SettingsActivity.java:
+    - [x] Вынести ProgressDialog в поле класса и закрывать его в onDestroy()
+    - [x] Перенести проверки жизненного цикла внутрь колбэков runOnUiThread() в checkForUpdates()
+- [x] Обновить AndroidManifest.xml:
+    - [x] Изменить screenOrientation на "sensor" для MainActivity и SettingsActivity
+    - [x] Удалить атрибут package из тега manifest
+- [x] Проверить сборку проекта через Gradle и убедиться в успешности компиляции
+- [ ] Сделать git commit изменений

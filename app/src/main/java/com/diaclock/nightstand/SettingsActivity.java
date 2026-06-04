@@ -105,12 +105,7 @@ public class SettingsActivity extends AppCompatActivity {
     private String selectedRingtoneUri = null;
     private MediaPlayer testMediaPlayer = null;
     private java.util.concurrent.ExecutorService scanExecutor = null;
-    
-    // Shared OkHttpClient for all network operations in this Activity
-    private static final OkHttpClient sharedClient = new OkHttpClient.Builder()
-            .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
-            .build();
+    private ProgressDialog progressDialog = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -711,7 +706,7 @@ public class SettingsActivity extends AppCompatActivity {
         final String subnetPrefix = basePrefix;
         android.util.Log.d("DiaNightScan", "Final scanning subnet prefix: " + subnetPrefix);
 
-        final ProgressDialog progressDialog = new ProgressDialog(this);
+        progressDialog = new ProgressDialog(this);
         progressDialog.setTitle(getString(R.string.dialog_scan_title));
         progressDialog.setMessage(getString(R.string.dialog_scan_msg_format, subnetPrefix));
         progressDialog.setCancelable(false);
@@ -773,7 +768,7 @@ public class SettingsActivity extends AppCompatActivity {
         String url = "http://" + targetIp + ":17580/sgv.json?brief_mode=Y";
         
         // Reuse shared client's connection pool with short timeouts for scan verification
-        OkHttpClient singleClient = sharedClient.newBuilder()
+        OkHttpClient singleClient = HttpClientProvider.getClient().newBuilder()
                 .connectTimeout(1500, java.util.concurrent.TimeUnit.MILLISECONDS)
                 .readTimeout(1500, java.util.concurrent.TimeUnit.MILLISECONDS)
                 .build();
@@ -885,7 +880,7 @@ public class SettingsActivity extends AppCompatActivity {
         }
         okhttp3.Request request = requestBuilder.build();
 
-        sharedClient.newCall(request).enqueue(new okhttp3.Callback() {
+        HttpClientProvider.getClient().newCall(request).enqueue(new okhttp3.Callback() {
             @Override
             public void onFailure(@NonNull okhttp3.Call call, @NonNull IOException e) {
                 runOnUiThread(() -> {
@@ -961,11 +956,11 @@ public class SettingsActivity extends AppCompatActivity {
                 .addHeader("User-Agent", "DiaNight-App")
                 .build();
                 
-        sharedClient.newCall(request).enqueue(new Callback() {
+        HttpClientProvider.getClient().newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                if (isFinishing() || isDestroyed()) return;
                 runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
                     tvUpdateStatus.setText(getString(R.string.msg_update_check_failed));
                     if (!silent) {
                         Toast.makeText(SettingsActivity.this, getString(R.string.err_update_check), Toast.LENGTH_SHORT).show();
@@ -976,14 +971,12 @@ public class SettingsActivity extends AppCompatActivity {
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 if (!response.isSuccessful()) {
-                    if (isFinishing() || isDestroyed()) {
-                        response.close();
-                        return;
-                    }
+                    final int code = response.code();
                     runOnUiThread(() -> {
-                        tvUpdateStatus.setText(getString(R.string.msg_update_check_error_code, response.code()));
+                        if (isFinishing() || isDestroyed()) return;
+                        tvUpdateStatus.setText(getString(R.string.msg_update_check_error_code, code));
                         if (!silent) {
-                            Toast.makeText(SettingsActivity.this, getString(R.string.err_update_check_code, response.code()), Toast.LENGTH_SHORT).show();
+                            Toast.makeText(SettingsActivity.this, getString(R.string.err_update_check_code, code), Toast.LENGTH_SHORT).show();
                         }
                     });
                     response.close();
@@ -1051,8 +1044,8 @@ public class SettingsActivity extends AppCompatActivity {
                         }
                     });
                 } catch (Exception e) {
-                    if (isFinishing() || isDestroyed()) return;
                     runOnUiThread(() -> {
+                        if (isFinishing() || isDestroyed()) return;
                         tvUpdateStatus.setText(getString(R.string.msg_update_parse_error));
                         if (!silent) {
                             Toast.makeText(SettingsActivity.this, getString(R.string.err_update_parse), Toast.LENGTH_SHORT).show();
@@ -1098,6 +1091,10 @@ public class SettingsActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         stopTestAlarm();
+        if (progressDialog != null && progressDialog.isShowing()) {
+            progressDialog.dismiss();
+            progressDialog = null;
+        }
         if (scanExecutor != null) {
             try {
                 scanExecutor.shutdownNow();

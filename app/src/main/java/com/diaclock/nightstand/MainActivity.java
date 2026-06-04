@@ -75,6 +75,12 @@ public class MainActivity extends AppCompatActivity {
     // Lifecycle guard to prevent OkHttp callbacks from accessing destroyed Activity
     private volatile boolean isActivityDestroyed = false;
     private boolean isBatteryReceiverRegistered = false;
+
+    // Flashlight overlay and gesture detector
+    private View viewFlashlightOverlay;
+    private boolean isFlashlightActive = false;
+    private ValueAnimator flashlightBrightnessAnimator;
+    private android.view.GestureDetector gestureDetector;
     
     private boolean isControlsFaded = false;
     private final Runnable inactivityRunnable = this::fadeAttributesOut;
@@ -116,7 +122,6 @@ public class MainActivity extends AppCompatActivity {
     private boolean nightlightMode = false;
     
     // Network variables
-    private final OkHttpClient httpClient = new OkHttpClient();
     private String serverIp = "192.168.0.111";
     private String apiSecret = "FBB9F80F9AC22E5B15F6DA1FFE599E14";
     private String cachedSecretHash = null; // Cached SHA-1 hash of apiSecret
@@ -125,7 +130,7 @@ public class MainActivity extends AppCompatActivity {
     private volatile boolean hasConnectionError = false;
     
     // Adaptive polling interval with exponential backoff on errors
-    private long networkPollInterval = 15000L; // 15 seconds base (CGMs update every 1-5 min)
+    private volatile long networkPollInterval = 15000L; // 15 seconds base (CGMs update every 1-5 min)
     private static final long BASE_POLL_INTERVAL = 15000L;
     private static final long MAX_POLL_INTERVAL = 120000L; // 2 minutes max backoff
     
@@ -195,7 +200,11 @@ public class MainActivity extends AppCompatActivity {
         
         // Register battery monitor
         if (!isBatteryReceiverRegistered) {
-            registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED), Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            }
             isBatteryReceiverRegistered = true;
         }
         
@@ -205,6 +214,9 @@ public class MainActivity extends AppCompatActivity {
         // Start breathing animation (hardware-accelerated)
         startBreathingAnimation();
         
+        // Initialize flashlight gesture detector and listeners
+        initFlashlight();
+
         // Initial inactivity trigger
         adjustTextSizes();
         resetUserInactivityTimer();
@@ -213,6 +225,16 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+
+        // Resume breathing animation
+        if (breathingAnimator != null) {
+            if (android.os.Build.VERSION.SDK_INT >= 19 && breathingAnimator.isPaused()) {
+                breathingAnimator.resume();
+            } else if (!breathingAnimator.isRunning()) {
+                breathingAnimator.start();
+            }
+        }
+
         String oldSource = dataSource;
         boolean oldNightlight = nightlightMode;
         loadSettings();
@@ -275,18 +297,35 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+        if (breathingAnimator != null) {
+            if (android.os.Build.VERSION.SDK_INT >= 19) {
+                breathingAnimator.pause();
+            } else {
+                breathingAnimator.cancel();
+            }
+        }
+    }
+
+    @Override
     protected void onDestroy() {
         isActivityDestroyed = true;
         super.onDestroy();
         stopAlarmSound();
         mainHandler.removeCallbacksAndMessages(null);
-        
+
+        if (flashlightBrightnessAnimator != null) {
+            flashlightBrightnessAnimator.cancel();
+            flashlightBrightnessAnimator = null;
+        }
+
         // Clean up breathing animation
         if (breathingAnimator != null) {
             breathingAnimator.cancel();
             breathingAnimator = null;
         }
-        
+
         // Clean up battery receiver
         if (isBatteryReceiverRegistered) {
             try {
@@ -296,14 +335,13 @@ public class MainActivity extends AppCompatActivity {
             }
             isBatteryReceiverRegistered = false;
         }
-        
+
         // Clean up xDrip receiver
         unregisterXdripReceiver();
-        
+
         // Clean up OkHttp resources
-        httpClient.dispatcher().cancelAll();
-        httpClient.connectionPool().evictAll();
-        
+        HttpClientProvider.getClient().dispatcher().cancelAll();
+
         // Clean up handlers
         pixelShiftHandler.removeCallbacksAndMessages(null);
         inactivityHandler.removeCallbacksAndMessages(null);
@@ -330,6 +368,8 @@ public class MainActivity extends AppCompatActivity {
         // Cache views used in pixelShiftRunnable to avoid repeated findViewById
         centralClickArea = findViewById(R.id.centralClickArea);
         statusBarContainer = findViewById(R.id.statusBarContainer);
+
+        viewFlashlightOverlay = findViewById(R.id.viewFlashlightOverlay);
     }
 
     private void loadSettings() {
@@ -579,7 +619,7 @@ public class MainActivity extends AppCompatActivity {
         }
         Request request = requestBuilder.build();
 
-        httpClient.newCall(request).enqueue(new Callback() {
+        HttpClientProvider.getClient().newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 Log.e(TAG, "Network call failed: " + e.getMessage());
@@ -697,7 +737,7 @@ public class MainActivity extends AppCompatActivity {
         }
         Request pebbleRequest = requestBuilder.build();
 
-        httpClient.newCall(pebbleRequest).enqueue(new Callback() {
+        HttpClientProvider.getClient().newCall(pebbleRequest).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 Log.d(TAG, "Pebble IoB fetch failed: " + e.getMessage());
@@ -920,6 +960,14 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, getString(R.string.msg_alarm_warning), Toast.LENGTH_LONG).show();
             } catch (Exception e) {
                 Log.e(TAG, "Playing alarm sound failed: " + e.getMessage());
+                if (mediaPlayer != null) {
+                    try {
+                        mediaPlayer.release();
+                    } catch (Exception ex) {
+                        // ignore
+                    }
+                    mediaPlayer = null;
+                }
             }
         }
     }
@@ -1065,8 +1113,7 @@ public class MainActivity extends AppCompatActivity {
      */
     private void adjustTextSizes() {
         try {
-            android.util.DisplayMetrics metrics = new android.util.DisplayMetrics();
-            getWindowManager().getDefaultDisplay().getMetrics(metrics);
+            android.util.DisplayMetrics metrics = getResources().getDisplayMetrics();
             float widthDp = metrics.widthPixels / metrics.density;
             
             // Base scaling factor targeting an 800dp wide standard screen
@@ -1097,8 +1144,7 @@ public class MainActivity extends AppCompatActivity {
      */
     private void adjustGlucoseAndIoBTextSizes() {
         try {
-            android.util.DisplayMetrics metrics = new android.util.DisplayMetrics();
-            getWindowManager().getDefaultDisplay().getMetrics(metrics);
+            android.util.DisplayMetrics metrics = getResources().getDisplayMetrics();
             float widthDp = metrics.widthPixels / metrics.density;
             
             // Base scaling factor targeting an 800dp wide standard screen
@@ -1141,6 +1187,99 @@ public class MainActivity extends AppCompatActivity {
                 + ", lengthFactor=" + lengthFactor + ", glucoseSp=" + glucoseTextSize + ", iobSp=" + iobTextSize);
         } catch (Exception e) {
             Log.e(TAG, "Error adjusting glucose/iob text sizes: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void onConfigurationChanged(@NonNull android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        adjustTextSizes();
+    }
+
+    private void initFlashlight() {
+        gestureDetector = new android.view.GestureDetector(this, new android.view.GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onDoubleTap(MotionEvent e) {
+                if (isAlarmSounding) {
+                    return false; // Snooze handled in onSingleTapConfirmed/onClick
+                }
+                toggleFlashlight();
+                return true;
+            }
+
+            @Override
+            public boolean onSingleTapConfirmed(MotionEvent e) {
+                if (isAlarmSounding) {
+                    snoozeAlarm();
+                    return true;
+                }
+                return false;
+            }
+        });
+
+        // Set touch listener on root layout to detect double-tap on empty areas
+        mainRootLayout.setOnTouchListener((v, event) -> {
+            gestureDetector.onTouchEvent(event);
+            return true;
+        });
+
+        // Set touch listener on the white overlay so we can double-tap to turn it off
+        viewFlashlightOverlay.setOnTouchListener((v, event) -> {
+            gestureDetector.onTouchEvent(event);
+            return true;
+        });
+    }
+
+    private void toggleFlashlight() {
+        if (isActivityDestroyed) return;
+
+        isFlashlightActive = !isFlashlightActive;
+
+        if (flashlightBrightnessAnimator != null) {
+            flashlightBrightnessAnimator.cancel();
+        }
+
+        if (isFlashlightActive) {
+            // Fade in white overlay
+            viewFlashlightOverlay.setAlpha(0.0f);
+            viewFlashlightOverlay.setVisibility(View.VISIBLE);
+            viewFlashlightOverlay.animate().alpha(1.0f).setDuration(750).start();
+
+            // Smoothly animate screen brightness up to maximum (1.0f)
+            flashlightBrightnessAnimator = ValueAnimator.ofFloat(0.1f, 1.0f);
+            flashlightBrightnessAnimator.setDuration(750);
+            flashlightBrightnessAnimator.addUpdateListener(animation -> {
+                if (isActivityDestroyed) return;
+                android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+                lp.screenBrightness = (float) animation.getAnimatedValue();
+                getWindow().setAttributes(lp);
+            });
+            flashlightBrightnessAnimator.start();
+        } else {
+            // Fade out white overlay
+            viewFlashlightOverlay.animate().alpha(0.0f).setDuration(750).withEndAction(() -> {
+                viewFlashlightOverlay.setVisibility(View.GONE);
+            }).start();
+
+            // Smoothly animate screen brightness down to minimal, then restore default
+            flashlightBrightnessAnimator = ValueAnimator.ofFloat(1.0f, 0.1f);
+            flashlightBrightnessAnimator.setDuration(750);
+            flashlightBrightnessAnimator.addUpdateListener(animation -> {
+                if (isActivityDestroyed) return;
+                android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+                lp.screenBrightness = (float) animation.getAnimatedValue();
+                getWindow().setAttributes(lp);
+            });
+            flashlightBrightnessAnimator.addListener(new android.animation.AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(android.animation.Animator animation) {
+                    if (isActivityDestroyed) return;
+                    android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+                    lp.screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE; // restore default
+                    getWindow().setAttributes(lp);
+                }
+            });
+            flashlightBrightnessAnimator.start();
         }
     }
 }

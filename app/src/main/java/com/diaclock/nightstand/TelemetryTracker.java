@@ -95,7 +95,7 @@ public class TelemetryTracker {
 
         Log.d(TAG, "Tracking new install: Market=" + marketName + ", Version=" + versionName + ", Device=" + deviceName);
 
-        OkHttpClient client = new OkHttpClient();
+        OkHttpClient client = HttpClientProvider.getClient();
         RequestBody formBody = new FormBody.Builder()
                 .add(ENTRY_MARKET, marketName)
                 .add(ENTRY_VERSION, versionName)
