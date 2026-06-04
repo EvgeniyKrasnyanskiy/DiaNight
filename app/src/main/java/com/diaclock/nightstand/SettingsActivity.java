@@ -107,6 +107,7 @@ public class SettingsActivity extends AppCompatActivity {
     private MediaPlayer testMediaPlayer = null;
     private java.util.concurrent.ExecutorService scanExecutor = null;
     private ProgressDialog progressDialog = null;
+    private okhttp3.OkHttpClient scanningClient = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -744,12 +745,28 @@ public class SettingsActivity extends AppCompatActivity {
             }
         }
 
+        // Cancel previous scanning client calls if active
+        if (scanningClient != null) {
+            try {
+                scanningClient.dispatcher().cancelAll();
+            } catch (Exception e) {
+                // Ignore
+            }
+        }
+
+        // Create a single shared scanning client with short timeouts for the entire scan run
+        scanningClient = HttpClientProvider.getClient().newBuilder()
+                .connectTimeout(1500, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .readTimeout(1500, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .build();
+
         // Initialize high performance light-weight executor pool (28 parallel threads)
         scanExecutor = java.util.concurrent.Executors.newFixedThreadPool(28);
 
         for (int i = 1; i <= 254; i++) {
             final String targetIp = subnetPrefix + i;
             final java.util.concurrent.ExecutorService currentExecutor = scanExecutor;
+            final okhttp3.OkHttpClient currentClient = scanningClient;
 
             scanExecutor.execute(new Runnable() {
                 @Override
@@ -771,7 +788,7 @@ public class SettingsActivity extends AppCompatActivity {
 
                     if (portOpen) {
                         // Candidate found, perform single target HTTP-validation to confirm xDrip+
-                        verifyXdrip(targetIp, discoveredDevices, progressDialog, finishedCount, currentExecutor);
+                        verifyXdrip(targetIp, discoveredDevices, progressDialog, finishedCount, currentExecutor, currentClient);
                     } else {
                         checkScanProgress(finishedCount, discoveredDevices, progressDialog, currentExecutor);
                     }
@@ -784,15 +801,10 @@ public class SettingsActivity extends AppCompatActivity {
                              final java.util.List<DiscoveredDevice> discoveredDevices, 
                              final ProgressDialog progressDialog,
                              final java.util.concurrent.atomic.AtomicInteger finishedCount,
-                             final java.util.concurrent.ExecutorService executor) {
+                             final java.util.concurrent.ExecutorService executor,
+                             final okhttp3.OkHttpClient clientToUse) {
         String url = "http://" + targetIp + ":17580/sgv.json?brief_mode=Y";
         
-        // Reuse shared client's connection pool with short timeouts for scan verification
-        OkHttpClient singleClient = HttpClientProvider.getClient().newBuilder()
-                .connectTimeout(1500, java.util.concurrent.TimeUnit.MILLISECONDS)
-                .readTimeout(1500, java.util.concurrent.TimeUnit.MILLISECONDS)
-                .build();
-
         final String secret = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
         okhttp3.Request.Builder requestBuilder = new okhttp3.Request.Builder().url(url);
         if (!secret.isEmpty()) {
@@ -802,7 +814,7 @@ public class SettingsActivity extends AppCompatActivity {
         }
 
         Request request = requestBuilder.build();
-        singleClient.newCall(request).enqueue(new Callback() {
+        clientToUse.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 android.util.Log.d("DiaNightScan", "HTTP verification failed for IP " + targetIp + ": " + e.getMessage());
@@ -922,58 +934,67 @@ public class SettingsActivity extends AppCompatActivity {
 
         String url = "http://" + ip + ":17580/sgv.json?brief_mode=Y";
         
-        okhttp3.Request.Builder requestBuilder = new okhttp3.Request.Builder().url(url);
-        if (!secret.isEmpty()) {
-            String hashedSecret = CryptoUtils.computeSHA1(secret);
-            requestBuilder.addHeader("api-secret", hashedSecret);
+        try {
+            okhttp3.Request.Builder requestBuilder = new okhttp3.Request.Builder().url(url);
+            if (!secret.isEmpty()) {
+                String hashedSecret = CryptoUtils.computeSHA1(secret);
+                requestBuilder.addHeader("api-secret", hashedSecret);
+            }
+            okhttp3.Request request = requestBuilder.build();
+
+            HttpClientProvider.getClient().newCall(request).enqueue(new okhttp3.Callback() {
+                @Override
+                public void onFailure(@NonNull okhttp3.Call call, @NonNull IOException e) {
+                    runOnUiThread(() -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        progressDialog.dismiss();
+                        new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                .setTitle(getString(R.string.dialog_test_error_title))
+                                .setMessage(getString(R.string.dialog_test_error_msg, ip, e.getMessage()))
+                                .setPositiveButton(getString(R.string.btn_ok), null)
+                                .show();
+                    });
+                }
+
+                @Override
+                public void onResponse(@NonNull okhttp3.Call call, @NonNull okhttp3.Response response) throws IOException {
+                    final int code = response.code();
+                    final String responseBody = response.body() != null ? response.body().string() : "";
+                    response.close();
+
+                    runOnUiThread(() -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        progressDialog.dismiss();
+                        if (code == 200) {
+                            new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                    .setTitle(getString(R.string.dialog_test_success_title))
+                                    .setMessage(getString(R.string.dialog_test_success_msg))
+                                    .setPositiveButton(getString(R.string.dialog_test_success_btn), null)
+                                    .show();
+                        } else if (code == 401) {
+                            new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                    .setTitle(getString(R.string.dialog_test_auth_title))
+                                    .setMessage(getString(R.string.dialog_test_auth_msg))
+                                    .setPositiveButton(getString(R.string.btn_ok), null)
+                                    .show();
+                        } else {
+                            new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                    .setTitle(getString(R.string.dialog_test_unknown_title))
+                                    .setMessage(getString(R.string.dialog_test_unknown_msg, code, responseBody))
+                                    .setPositiveButton(getString(R.string.btn_ok), null)
+                                    .show();
+                        }
+                    });
+                }
+            });
+        } catch (IllegalArgumentException e) {
+            progressDialog.dismiss();
+            new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle(getString(R.string.dialog_test_error_title))
+                    .setMessage(getString(R.string.dialog_test_error_msg, ip, e.getMessage()))
+                    .setPositiveButton(getString(R.string.btn_ok), null)
+                    .show();
         }
-        okhttp3.Request request = requestBuilder.build();
-
-        HttpClientProvider.getClient().newCall(request).enqueue(new okhttp3.Callback() {
-            @Override
-            public void onFailure(@NonNull okhttp3.Call call, @NonNull IOException e) {
-                runOnUiThread(() -> {
-                    if (isFinishing() || isDestroyed()) return;
-                    progressDialog.dismiss();
-                    new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                            .setTitle(getString(R.string.dialog_test_error_title))
-                            .setMessage(getString(R.string.dialog_test_error_msg, ip, e.getMessage()))
-                            .setPositiveButton(getString(R.string.btn_ok), null)
-                            .show();
-                });
-            }
-
-            @Override
-            public void onResponse(@NonNull okhttp3.Call call, @NonNull okhttp3.Response response) throws IOException {
-                final int code = response.code();
-                final String responseBody = response.body() != null ? response.body().string() : "";
-                response.close();
-
-                runOnUiThread(() -> {
-                    if (isFinishing() || isDestroyed()) return;
-                    progressDialog.dismiss();
-                    if (code == 200) {
-                        new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                                .setTitle(getString(R.string.dialog_test_success_title))
-                                .setMessage(getString(R.string.dialog_test_success_msg))
-                                .setPositiveButton(getString(R.string.dialog_test_success_btn), null)
-                                .show();
-                    } else if (code == 401) {
-                        new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                                .setTitle(getString(R.string.dialog_test_auth_title))
-                                .setMessage(getString(R.string.dialog_test_auth_msg))
-                                .setPositiveButton(getString(R.string.btn_ok), null)
-                                .show();
-                    } else {
-                        new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                                .setTitle(getString(R.string.dialog_test_unknown_title))
-                                .setMessage(getString(R.string.dialog_test_unknown_msg, code, responseBody))
-                                .setPositiveButton(getString(R.string.btn_ok), null)
-                                .show();
-                    }
-                });
-            }
-        });
     }
 
     /**
@@ -1147,6 +1168,13 @@ public class SettingsActivity extends AppCompatActivity {
         if (scanExecutor != null) {
             try {
                 scanExecutor.shutdownNow();
+            } catch (Exception e) {
+                // Ignore
+            }
+        }
+        if (scanningClient != null) {
+            try {
+                scanningClient.dispatcher().cancelAll();
             } catch (Exception e) {
                 // Ignore
             }
