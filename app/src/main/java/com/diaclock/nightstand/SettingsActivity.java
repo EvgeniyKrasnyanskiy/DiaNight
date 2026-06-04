@@ -678,6 +678,15 @@ public class SettingsActivity extends AppCompatActivity {
         return "192.168.1.1";
     }
 
+    private static class DiscoveredDevice {
+        final String ip;
+        final int code;
+        DiscoveredDevice(String ip, int code) {
+            this.ip = ip;
+            this.code = code;
+        }
+    }
+
     private void startNetworkAutoDiscovery() {
         String secretKey = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
         if (secretKey.isEmpty()) {
@@ -723,7 +732,7 @@ public class SettingsActivity extends AppCompatActivity {
         progressDialog.setCancelable(false);
         progressDialog.show();
         
-        final java.util.concurrent.atomic.AtomicBoolean found = new java.util.concurrent.atomic.AtomicBoolean(false);
+        final java.util.List<DiscoveredDevice> discoveredDevices = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
         final java.util.concurrent.atomic.AtomicInteger finishedCount = new java.util.concurrent.atomic.AtomicInteger(0);
 
         // Cancel previous executor if running
@@ -745,8 +754,8 @@ public class SettingsActivity extends AppCompatActivity {
             scanExecutor.execute(new Runnable() {
                 @Override
                 public void run() {
-                    if (found.get() || Thread.currentThread().isInterrupted()) {
-                        checkScanProgress(finishedCount, found, progressDialog, currentExecutor);
+                    if (Thread.currentThread().isInterrupted()) {
+                        checkScanProgress(finishedCount, discoveredDevices, progressDialog, currentExecutor);
                         return;
                     }
 
@@ -760,22 +769,22 @@ public class SettingsActivity extends AppCompatActivity {
                         // Port is closed or host is not reachable
                     }
 
-                    if (portOpen && !found.get()) {
+                    if (portOpen) {
                         // Candidate found, perform single target HTTP-validation to confirm xDrip+
-                        verifyXdripAndSelect(targetIp, found, progressDialog, finishedCount, currentExecutor);
+                        verifyXdrip(targetIp, discoveredDevices, progressDialog, finishedCount, currentExecutor);
                     } else {
-                        checkScanProgress(finishedCount, found, progressDialog, currentExecutor);
+                        checkScanProgress(finishedCount, discoveredDevices, progressDialog, currentExecutor);
                     }
                 }
             });
         }
     }
 
-    private void verifyXdripAndSelect(final String targetIp, 
-                                       final java.util.concurrent.atomic.AtomicBoolean found, 
-                                       final ProgressDialog progressDialog,
-                                       final java.util.concurrent.atomic.AtomicInteger finishedCount,
-                                       final java.util.concurrent.ExecutorService executor) {
+    private void verifyXdrip(final String targetIp, 
+                             final java.util.List<DiscoveredDevice> discoveredDevices, 
+                             final ProgressDialog progressDialog,
+                             final java.util.concurrent.atomic.AtomicInteger finishedCount,
+                             final java.util.concurrent.ExecutorService executor) {
         String url = "http://" + targetIp + ":17580/sgv.json?brief_mode=Y";
         
         // Reuse shared client's connection pool with short timeouts for scan verification
@@ -797,7 +806,7 @@ public class SettingsActivity extends AppCompatActivity {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 android.util.Log.d("DiaNightScan", "HTTP verification failed for IP " + targetIp + ": " + e.getMessage());
-                checkScanProgress(finishedCount, found, progressDialog, executor);
+                checkScanProgress(finishedCount, discoveredDevices, progressDialog, executor);
             }
 
             @Override
@@ -807,51 +816,78 @@ public class SettingsActivity extends AppCompatActivity {
                 response.close();
 
                 // 200 OK or 401 Unauthorized strongly proves it's indeed xDrip+ server!
-                if ((code == 200 || code == 401) && found.compareAndSet(false, true)) {
-                    // Instantly shutdown the executor to free up system threads
-                    executor.shutdownNow();
-
-                    // Automatically save IP in SharedPreferences
-                    SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
-                    editor.putString("ip_address", targetIp);
-                    editor.apply();
-
-                    runOnUiThread(() -> {
-                        if (isFinishing() || isDestroyed()) return;
-                        etIpAddress.setText(targetIp);
-                        etIpAddress.requestFocus();
-                        progressDialog.dismiss();
-                        if (code == 401) {
-                            Toast.makeText(SettingsActivity.this, getString(R.string.msg_xdrip_found_auth_required, targetIp), Toast.LENGTH_LONG).show();
-                            new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                                    .setTitle(getString(R.string.dialog_xdrip_found_auth_required_title))
-                                    .setMessage(getString(R.string.dialog_xdrip_found_auth_required_msg, targetIp))
-                                    .setPositiveButton(getString(R.string.btn_ok), null)
-                                    .show();
-                        } else {
-                            Toast.makeText(SettingsActivity.this, getString(R.string.msg_xdrip_found_success, targetIp), Toast.LENGTH_LONG).show();
-                        }
-                    });
-                } else {
-                    checkScanProgress(finishedCount, found, progressDialog, executor);
+                if (code == 200 || code == 401) {
+                    discoveredDevices.add(new DiscoveredDevice(targetIp, code));
                 }
+                checkScanProgress(finishedCount, discoveredDevices, progressDialog, executor);
             }
         });
     }
 
-    private void checkScanProgress(java.util.concurrent.atomic.AtomicInteger finishedCount, 
-                                   java.util.concurrent.atomic.AtomicBoolean found, 
-                                   ProgressDialog progressDialog,
-                                   java.util.concurrent.ExecutorService executor) {
+    private void checkScanProgress(final java.util.concurrent.atomic.AtomicInteger finishedCount, 
+                                   final java.util.List<DiscoveredDevice> discoveredDevices, 
+                                   final ProgressDialog progressDialog,
+                                   final java.util.concurrent.ExecutorService executor) {
         int current = finishedCount.incrementAndGet();
-        if (current >= 254 && !found.get()) {
+        if (current >= 254) {
             executor.shutdown();
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) return;
                 progressDialog.dismiss();
-                Toast.makeText(SettingsActivity.this, getString(R.string.msg_xdrip_not_found), Toast.LENGTH_LONG).show();
+                if (discoveredDevices.isEmpty()) {
+                    Toast.makeText(SettingsActivity.this, getString(R.string.msg_xdrip_not_found), Toast.LENGTH_LONG).show();
+                } else if (discoveredDevices.size() == 1) {
+                    selectDiscoveredDevice(discoveredDevices.get(0));
+                } else {
+                    showDeviceSelectionDialog(discoveredDevices);
+                }
             });
         }
+    }
+
+    private void selectDiscoveredDevice(DiscoveredDevice device) {
+        final String targetIp = device.ip;
+        final int code = device.code;
+
+        // Automatically save IP in SharedPreferences
+        SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
+        editor.putString("ip_address", targetIp);
+        editor.apply();
+
+        etIpAddress.setText(targetIp);
+        etIpAddress.requestFocus();
+
+        if (code == 401) {
+            Toast.makeText(SettingsActivity.this, getString(R.string.msg_xdrip_found_auth_required, targetIp), Toast.LENGTH_LONG).show();
+            new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle(getString(R.string.dialog_xdrip_found_auth_required_title))
+                    .setMessage(getString(R.string.dialog_xdrip_found_auth_required_msg, targetIp))
+                    .setPositiveButton(getString(R.string.btn_ok), null)
+                    .show();
+        } else {
+            Toast.makeText(SettingsActivity.this, getString(R.string.msg_xdrip_found_success, targetIp), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void showDeviceSelectionDialog(final java.util.List<DiscoveredDevice> devices) {
+        final String[] items = new String[devices.size()];
+        for (int i = 0; i < devices.size(); i++) {
+            DiscoveredDevice dev = devices.get(i);
+            String status = dev.code == 200 
+                ? getString(R.string.device_status_available) 
+                : getString(R.string.device_status_auth_required);
+            items[i] = dev.ip + " (" + status + ")";
+        }
+
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(getString(R.string.dialog_multiple_xdrip_title))
+                .setItems(items, (dialog, which) -> {
+                    if (which >= 0 && which < devices.size()) {
+                        selectDiscoveredDevice(devices.get(which));
+                    }
+                })
+                .setNegativeButton(getString(R.string.btn_cancel), null)
+                .show();
     }
 
     private void showHelpDialog() {
