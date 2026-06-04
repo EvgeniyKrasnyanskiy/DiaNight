@@ -174,6 +174,13 @@ public class MainActivity extends AppCompatActivity {
 
         initViews();
         loadSettings();
+        if (savedInstanceState != null) {
+            lastGlucoseMmol = savedInstanceState.getDouble("lastGlucoseMmol", -1.0);
+            lastDirection = savedInstanceState.getString("lastDirection", "");
+            hasConnectionError = savedInstanceState.getBoolean("hasConnectionError", false);
+            isShowingTime = savedInstanceState.getBoolean("isShowingTime", true);
+            alarmSnoozeUntilTime = savedInstanceState.getLong("alarmSnoozeUntilTime", 0L);
+        }
         setupListeners();
 
         // Track installation analytics
@@ -191,9 +198,18 @@ public class MainActivity extends AppCompatActivity {
         } else {
             if ("broadcast".equals(dataSource)) {
                 registerXdripReceiver();
-                tvGlucose.setText(getString(R.string.msg_waiting));
+                if (lastGlucoseMmol > 0) {
+                    tvGlucose.setText(String.format(Locale.US, "%.1f%s", lastGlucoseMmol, getTrendArrow(lastDirection)));
+                } else {
+                    tvGlucose.setText(getString(R.string.msg_waiting));
+                }
                 tvIoB.setVisibility(View.GONE);
             } else {
+                if (lastGlucoseMmol > 0) {
+                    tvGlucose.setText(String.format(Locale.US, "%.1f%s", lastGlucoseMmol, getTrendArrow(lastDirection)));
+                } else {
+                    tvGlucose.setText("---");
+                }
                 startNetworkPolling();
             }
         }
@@ -1129,6 +1145,14 @@ public class MainActivity extends AppCompatActivity {
             tvColon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, timeTextSize);
             tvMinutes.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, timeTextSize);
             
+            // Dynamically scale the bottom margin of the colon based on screen width/scale
+            // to keep it vertically centered with the giant digits.
+            if (tvColon.getLayoutParams() instanceof android.widget.LinearLayout.LayoutParams) {
+                android.widget.LinearLayout.LayoutParams lp = (android.widget.LinearLayout.LayoutParams) tvColon.getLayoutParams();
+                lp.bottomMargin = (int) (20 * scale * metrics.density);
+                tvColon.setLayoutParams(lp);
+            }
+            
             Log.d(TAG, "Clock text scaling applied: widthDp=" + widthDp + ", scale=" + scale + ", timeSp=" + timeTextSize);
             
             // Dynamically scale glucose and IoB based on screen sizes and actual content
@@ -1281,5 +1305,15 @@ public class MainActivity extends AppCompatActivity {
             });
             flashlightBrightnessAnimator.start();
         }
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putDouble("lastGlucoseMmol", lastGlucoseMmol);
+        outState.putString("lastDirection", lastDirection);
+        outState.putBoolean("hasConnectionError", hasConnectionError);
+        outState.putBoolean("isShowingTime", isShowingTime);
+        outState.putLong("alarmSnoozeUntilTime", alarmSnoozeUntilTime);
     }
 }
