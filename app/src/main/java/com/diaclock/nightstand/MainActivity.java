@@ -264,6 +264,15 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
+        // Resume alarm visual animation if sounding
+        if (isAlarmSounding && alarmVisualAnimator != null) {
+            if (android.os.Build.VERSION.SDK_INT >= 19 && alarmVisualAnimator.isPaused()) {
+                alarmVisualAnimator.resume();
+            } else if (!alarmVisualAnimator.isRunning()) {
+                alarmVisualAnimator.start();
+            }
+        }
+
         // Resume battery monitoring
         registerBatteryReceiver();
 
@@ -341,10 +350,18 @@ public class MainActivity extends AppCompatActivity {
                 breathingAnimator.cancel();
             }
         }
+        if (alarmVisualAnimator != null) {
+            if (android.os.Build.VERSION.SDK_INT >= 19) {
+                alarmVisualAnimator.pause();
+            } else {
+                alarmVisualAnimator.cancel();
+            }
+        }
         mainHandler.removeCallbacks(timeRunnable);
         mainHandler.removeCallbacks(networkRunnable);
         mainHandler.removeCallbacks(toggleRunnable);
         pixelShiftHandler.removeCallbacks(pixelShiftRunnable);
+        inactivityHandler.removeCallbacks(inactivityRunnable);
         unregisterBatteryReceiver();
         unregisterXdripReceiver();
     }
@@ -651,91 +668,103 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        String url = "http://" + serverIp + ":17580/sgv.json";
+        String url = "http://" + serverIp.trim() + ":17580/sgv.json";
         
-        Request.Builder requestBuilder = new Request.Builder().url(url);
-        if (cachedSecretHash != null) {
-            requestBuilder.addHeader("api-secret", cachedSecretHash);
-        }
-        Request request = requestBuilder.build();
-
-        HttpClientProvider.getClient().newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                Log.e(TAG, "Network call failed: " + e.getMessage());
-                // Exponential backoff on network errors
-                networkPollInterval = Math.min(networkPollInterval * 2, MAX_POLL_INTERVAL);
-                if (isActivityDestroyed) return;
-                runOnUiThread(() -> {
-                    showNetworkWarning(true);
-                    tvGlucose.setText("---");
-                    tvIoB.setVisibility(View.GONE);
-                    adjustGlucoseAndIoBTextSizes();
-                    applyTextColor();
-                });
+        try {
+            Request.Builder requestBuilder = new Request.Builder().url(url);
+            if (cachedSecretHash != null) {
+                requestBuilder.addHeader("api-secret", cachedSecretHash);
             }
+            Request request = requestBuilder.build();
 
-            @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                try {
-                    if (!response.isSuccessful()) {
-                        networkPollInterval = Math.min(networkPollInterval * 2, MAX_POLL_INTERVAL);
-                        if (isActivityDestroyed) return;
-                        runOnUiThread(() -> {
-                            showNetworkWarning(true);
-                            tvGlucose.setText("---");
-                            tvIoB.setVisibility(View.GONE);
-                            adjustGlucoseAndIoBTextSizes();
-                            applyTextColor();
-                        });
-                        return;
-                    }
+            HttpClientProvider.getClient().newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                    Log.e(TAG, "Network call failed: " + e.getMessage());
+                    // Exponential backoff on network errors
+                    networkPollInterval = Math.min(networkPollInterval * 2, MAX_POLL_INTERVAL);
+                    if (isActivityDestroyed) return;
+                    runOnUiThread(() -> {
+                        showNetworkWarning(true);
+                        tvGlucose.setText("---");
+                        tvIoB.setVisibility(View.GONE);
+                        adjustGlucoseAndIoBTextSizes();
+                        applyTextColor();
+                    });
+                }
 
-                    String responseBody = response.body() != null ? response.body().string() : "";
+                @Override
+                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                     try {
-                        JsonElement element = JsonParser.parseString(responseBody);
-                        int sgv = 0;
-                        String direction = "";
-                        
-                        if (element.isJsonArray()) {
-                            JsonArray array = element.getAsJsonArray();
-                            if (array.size() > 0) {
-                                com.google.gson.JsonObject obj = array.get(0).getAsJsonObject();
+                        if (!response.isSuccessful()) {
+                            networkPollInterval = Math.min(networkPollInterval * 2, MAX_POLL_INTERVAL);
+                            if (isActivityDestroyed) return;
+                            runOnUiThread(() -> {
+                                showNetworkWarning(true);
+                                tvGlucose.setText("---");
+                                tvIoB.setVisibility(View.GONE);
+                                adjustGlucoseAndIoBTextSizes();
+                                applyTextColor();
+                            });
+                            return;
+                        }
+
+                        String responseBody = response.body() != null ? response.body().string() : "";
+                        try {
+                            JsonElement element = JsonParser.parseString(responseBody);
+                            int sgv = 0;
+                            String direction = "";
+                            
+                            if (element.isJsonArray()) {
+                                JsonArray array = element.getAsJsonArray();
+                                if (array.size() > 0) {
+                                    com.google.gson.JsonObject obj = array.get(0).getAsJsonObject();
+                                    sgv = obj.get("sgv").getAsInt();
+                                    if (obj.has("direction")) {
+                                        direction = obj.get("direction").getAsString();
+                                    }
+                                }
+                            } else if (element.isJsonObject()) {
+                                com.google.gson.JsonObject obj = element.getAsJsonObject();
                                 sgv = obj.get("sgv").getAsInt();
                                 if (obj.has("direction")) {
                                     direction = obj.get("direction").getAsString();
                                 }
                             }
-                        } else if (element.isJsonObject()) {
-                            com.google.gson.JsonObject obj = element.getAsJsonObject();
-                            sgv = obj.get("sgv").getAsInt();
-                            if (obj.has("direction")) {
-                                direction = obj.get("direction").getAsString();
-                            }
-                        }
 
-                        if (sgv > 0) {
-                            final double glucoseMmol = sgv / 18.0;
-                            final String finalDirection = direction;
-                            
-                            // Reset polling interval on successful data fetch
-                            networkPollInterval = BASE_POLL_INTERVAL;
-                            
-                            if (isActivityDestroyed) return;
-                            runOnUiThread(() -> {
-                                // Update shared state on UI thread to prevent data races
-                                lastGlucoseMmol = glucoseMmol;
-                                lastDirection = finalDirection;
-                                showNetworkWarning(false);
-                                tvGlucose.setText(String.format(Locale.US, "%.1f%s", glucoseMmol, getTrendArrow(finalDirection)));
-                                adjustGlucoseAndIoBTextSizes();
-                                applyTextColor();
-                                checkAlarms(glucoseMmol);
-                            });
-                            
-                            // Fetch IoB from the separate /pebble endpoint
-                            fetchIoBData();
-                        } else {
+                            if (sgv > 0) {
+                                final double glucoseMmol = sgv / 18.0;
+                                final String finalDirection = direction;
+                                
+                                // Reset polling interval on successful data fetch
+                                networkPollInterval = BASE_POLL_INTERVAL;
+                                
+                                if (isActivityDestroyed) return;
+                                runOnUiThread(() -> {
+                                    // Update shared state on UI thread to prevent data races
+                                    lastGlucoseMmol = glucoseMmol;
+                                    lastDirection = finalDirection;
+                                    showNetworkWarning(false);
+                                    tvGlucose.setText(String.format(Locale.US, "%.1f%s", glucoseMmol, getTrendArrow(finalDirection)));
+                                    adjustGlucoseAndIoBTextSizes();
+                                    applyTextColor();
+                                    checkAlarms(glucoseMmol);
+                                });
+                                
+                                // Fetch IoB from the separate /pebble endpoint
+                                fetchIoBData();
+                            } else {
+                                if (isActivityDestroyed) return;
+                                runOnUiThread(() -> {
+                                    showNetworkWarning(true);
+                                    tvGlucose.setText("---");
+                                    tvIoB.setVisibility(View.GONE);
+                                    adjustGlucoseAndIoBTextSizes();
+                                    applyTextColor();
+                                });
+                            }
+                        } catch (Exception e) {
+                            Log.e(TAG, "Parsing SGV JSON failed: " + e.getMessage());
                             if (isActivityDestroyed) return;
                             runOnUiThread(() -> {
                                 showNetworkWarning(true);
@@ -745,22 +774,19 @@ public class MainActivity extends AppCompatActivity {
                                 applyTextColor();
                             });
                         }
-                    } catch (Exception e) {
-                        Log.e(TAG, "Parsing SGV JSON failed: " + e.getMessage());
-                        if (isActivityDestroyed) return;
-                        runOnUiThread(() -> {
-                            showNetworkWarning(true);
-                            tvGlucose.setText("---");
-                            tvIoB.setVisibility(View.GONE);
-                            adjustGlucoseAndIoBTextSizes();
-                            applyTextColor();
-                        });
+                    } finally {
+                        response.close();
                     }
-                } finally {
-                    response.close();
                 }
-            }
-        });
+            });
+        } catch (IllegalArgumentException e) {
+            Log.e(TAG, "Invalid server URL: " + e.getMessage());
+            showNetworkWarning(true);
+            tvGlucose.setText("---");
+            tvIoB.setVisibility(View.GONE);
+            adjustGlucoseAndIoBTextSizes();
+            applyTextColor();
+        }
     }
 
     /**
@@ -769,93 +795,98 @@ public class MainActivity extends AppCompatActivity {
      * The /pebble response structure: {"status":[{"iob":{"iob":1.25,...},...}],...}
      */
     private void fetchIoBData() {
-        String pebbleUrl = "http://" + serverIp + ":17580/pebble";
+        String pebbleUrl = "http://" + serverIp.trim() + ":17580/pebble";
         
-        Request.Builder requestBuilder = new Request.Builder().url(pebbleUrl);
-        if (cachedSecretHash != null) {
-            requestBuilder.addHeader("api-secret", cachedSecretHash);
-        }
-        Request pebbleRequest = requestBuilder.build();
-
-        HttpClientProvider.getClient().newCall(pebbleRequest).enqueue(new Callback() {
-            @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                Log.d(TAG, "Pebble IoB fetch failed: " + e.getMessage());
-                if (isActivityDestroyed) return;
-                runOnUiThread(() -> tvIoB.setVisibility(View.GONE));
+        try {
+            Request.Builder requestBuilder = new Request.Builder().url(pebbleUrl);
+            if (cachedSecretHash != null) {
+                requestBuilder.addHeader("api-secret", cachedSecretHash);
             }
+            Request pebbleRequest = requestBuilder.build();
 
-            @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                try {
-                    if (!response.isSuccessful()) {
-                        if (!isActivityDestroyed) {
-                            runOnUiThread(() -> tvIoB.setVisibility(View.GONE));
-                        }
-                        return;
-                    }
+            HttpClientProvider.getClient().newCall(pebbleRequest).enqueue(new Callback() {
+                @Override
+                public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                    Log.d(TAG, "Pebble IoB fetch failed: " + e.getMessage());
+                    if (isActivityDestroyed) return;
+                    runOnUiThread(() -> tvIoB.setVisibility(View.GONE));
+                }
 
-                    String body = response.body() != null ? response.body().string() : "";
-                    Log.d(TAG, "Pebble raw response (first 500 chars): " + body.substring(0, Math.min(body.length(), 500)));
+                @Override
+                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                     try {
-                        com.google.gson.JsonObject root = JsonParser.parseString(body).getAsJsonObject();
-                        double iobValue = -1.0;
-                        
-                        // Parse IoB from: {"bgs":[{"iob":"0,64",...}]} (Standard Nightscout Pebble format in xDrip+)
-                        if (root.has("bgs")) {
-                            JsonArray bgsArray = root.getAsJsonArray("bgs");
-                            if (bgsArray.size() > 0) {
-                                com.google.gson.JsonObject bgsObj = bgsArray.get(0).getAsJsonObject();
-                                if (bgsObj.has("iob")) {
-                                    iobValue = parseIobElement(bgsObj.get("iob"));
-                                }
+                        if (!response.isSuccessful()) {
+                            if (!isActivityDestroyed) {
+                                runOnUiThread(() -> tvIoB.setVisibility(View.GONE));
                             }
+                            return;
                         }
-                        
-                        // Fallback to: {"status":[{"iob":{"iob":1.25,...}}]}
-                        if (iobValue < 0 && root.has("status")) {
-                            JsonArray statusArray = root.getAsJsonArray("status");
-                            if (statusArray.size() > 0) {
-                                com.google.gson.JsonObject statusObj = statusArray.get(0).getAsJsonObject();
-                                if (statusObj.has("iob")) {
-                                    JsonElement statusIobElement = statusObj.get("iob");
-                                    if (statusIobElement.isJsonObject()) {
-                                        com.google.gson.JsonObject iobObj = statusIobElement.getAsJsonObject();
-                                        if (iobObj.has("iob")) {
-                                            iobValue = parseIobElement(iobObj.get("iob"));
-                                        }
-                                    } else {
-                                        iobValue = parseIobElement(statusIobElement);
+
+                        String body = response.body() != null ? response.body().string() : "";
+                        Log.d(TAG, "Pebble raw response (first 500 chars): " + body.substring(0, Math.min(body.length(), 500)));
+                        try {
+                            com.google.gson.JsonObject root = JsonParser.parseString(body).getAsJsonObject();
+                            double iobValue = -1.0;
+                            
+                            // Parse IoB from: {"bgs":[{"iob":"0,64",...}]} (Standard Nightscout Pebble format in xDrip+)
+                            if (root.has("bgs")) {
+                                JsonArray bgsArray = root.getAsJsonArray("bgs");
+                                if (bgsArray.size() > 0) {
+                                    com.google.gson.JsonObject bgsObj = bgsArray.get(0).getAsJsonObject();
+                                    if (bgsObj.has("iob")) {
+                                        iobValue = parseIobElement(bgsObj.get("iob"));
                                     }
                                 }
                             }
-                        }
-                        
-                        final double finalIob = iobValue;
-                        if (isActivityDestroyed) return;
-                        runOnUiThread(() -> {
-                            if (finalIob >= 0) {
-                                tvIoB.setText(String.format(Locale.US, "%.2f", finalIob));
-                                tvIoB.setVisibility(View.VISIBLE);
-                                Log.d(TAG, "IoB displayed: " + finalIob);
-                            } else {
-                                tvIoB.setVisibility(View.GONE);
+                            
+                            // Fallback to: {"status":[{"iob":{"iob":1.25,...}}]}
+                            if (iobValue < 0 && root.has("status")) {
+                                JsonArray statusArray = root.getAsJsonArray("status");
+                                if (statusArray.size() > 0) {
+                                    com.google.gson.JsonObject statusObj = statusArray.get(0).getAsJsonObject();
+                                    if (statusObj.has("iob")) {
+                                        JsonElement statusIobElement = statusObj.get("iob");
+                                        if (statusIobElement.isJsonObject()) {
+                                            com.google.gson.JsonObject iobObj = statusIobElement.getAsJsonObject();
+                                            if (iobObj.has("iob")) {
+                                                iobValue = parseIobElement(iobObj.get("iob"));
+                                            }
+                                        } else {
+                                            iobValue = parseIobElement(statusIobElement);
+                                        }
+                                    }
+                                }
                             }
-                            adjustGlucoseAndIoBTextSizes();
-                        });
-                    } catch (Exception e) {
-                        Log.e(TAG, "Parsing Pebble IoB failed: " + e.getMessage());
-                        if (isActivityDestroyed) return;
-                        runOnUiThread(() -> {
-                            tvIoB.setVisibility(View.GONE);
-                            adjustGlucoseAndIoBTextSizes();
-                        });
+                            
+                            final double finalIob = iobValue;
+                            if (isActivityDestroyed) return;
+                            runOnUiThread(() -> {
+                                if (finalIob >= 0) {
+                                    tvIoB.setText(String.format(Locale.US, "%.2f", finalIob));
+                                    tvIoB.setVisibility(View.VISIBLE);
+                                    Log.d(TAG, "IoB displayed: " + finalIob);
+                                } else {
+                                    tvIoB.setVisibility(View.GONE);
+                                }
+                                adjustGlucoseAndIoBTextSizes();
+                            });
+                        } catch (Exception e) {
+                            Log.e(TAG, "Parsing Pebble IoB failed: " + e.getMessage());
+                            if (isActivityDestroyed) return;
+                            runOnUiThread(() -> {
+                                tvIoB.setVisibility(View.GONE);
+                                adjustGlucoseAndIoBTextSizes();
+                            });
+                        }
+                    } finally {
+                        response.close();
                     }
-                } finally {
-                    response.close();
                 }
-            }
-        });
+            });
+        } catch (IllegalArgumentException e) {
+            Log.e(TAG, "Invalid pebble URL: " + e.getMessage());
+            tvIoB.setVisibility(View.GONE);
+        }
     }
 
     /**
