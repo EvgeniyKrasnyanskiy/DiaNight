@@ -1,76 +1,58 @@
-# План реализации: Оптимизация энергоэффективности, автоскрытие колокольчика и мягкая индикация тревоги в MainActivity
+# План реализации: Исправление багов стабильности, оптимизация OkHttpClient и защита от некорректного ввода
 
 ## Предложенные изменения
 
 ### MainActivity.java
 [MODIFY] [MainActivity.java](file:///h:/DiaNight/app/src/main/java/com/diaclock/nightstand/MainActivity.java)
 
-1. **Оптимизация `timeRunnable`:**
-   - Инициализировать `timeRunnable` как `final` поле класса один раз.
-   - Метод `startTimeUpdates()` упростить до безопасного сброса и постановки в очередь:
-     ```java
-     private void startTimeUpdates() {
-         mainHandler.removeCallbacks(timeRunnable);
-         mainHandler.post(timeRunnable);
-     }
-     ```
-2. **Вынос регистрации `batteryReceiver`:**
-   - Создать методы `registerBatteryReceiver()` и `unregisterBatteryReceiver()` для безопасной регистрации/разрегистрации ресивера с проверкой флага `isBatteryReceiverRegistered`.
-3. **Остановка и запуск процессов в жизненном цикле (`onPause` / `onResume`):**
-   - В `onPause()` останавливать **все** фоновые задачи и отписываться от событий:
-     ```java
-     mainHandler.removeCallbacks(timeRunnable);
-     mainHandler.removeCallbacks(networkRunnable);
-     mainHandler.removeCallbacks(toggleRunnable);
-     pixelShiftHandler.removeCallbacks(pixelShiftRunnable);
-     unregisterBatteryReceiver();
-     unregisterXdripReceiver();
-     ```
-   - В `onResume()` запускать задачи заново:
-     ```java
-     registerBatteryReceiver();
-     startTimeUpdates();
-     pixelShiftHandler.removeCallbacks(pixelShiftRunnable);
-     pixelShiftHandler.post(pixelShiftRunnable);
-     if (!nightlightMode) {
-         startToggleCycle();
-     }
-     ```
-4. **Скрытие иконки «Колокольчик»:**
-   - Изменить метод `fadeAttributesOut()`, чтобы иконка `ivAlarmBell` скрывалась через 15 секунд всегда (убрав условие `if (!alarmEnabled)`).
-5. **Визуальная индикация тревоги (мягкое мерцание):**
-   - Создать поле `private ValueAnimator alarmVisualAnimator` класса `MainActivity`.
-   - В `startAlarmSound()` инициализировать и запустить пульсацию фона `mainRootLayout` между черным цветом и глубоким темно-красным (`#330000`):
-     ```java
-     alarmVisualAnimator = ValueAnimator.ofObject(new android.animation.ArgbEvaluator(), Color.BLACK, Color.parseColor("#330000"));
-     alarmVisualAnimator.setDuration(1500);
-     alarmVisualAnimator.setRepeatCount(ValueAnimator.INFINITE);
-     alarmVisualAnimator.setRepeatMode(ValueAnimator.REVERSE);
-     alarmVisualAnimator.addUpdateListener(animation -> {
-         if (mainRootLayout != null && !isActivityDestroyed) {
-             mainRootLayout.setBackgroundColor((int) animation.getAnimatedValue());
-         }
-     });
-     alarmVisualAnimator.start();
-     ```
-   - В `stopAlarmSound()` отменять анимацию и возвращать фон в чисто черный (`Color.BLACK`):
+1. **Отмена таймера неактивности в `onPause`:**
+   - В метод `onPause()` добавить `inactivityHandler.removeCallbacks(inactivityRunnable);`.
+2. **Оптимизация `alarmVisualAnimator` в фоне:**
+   - В метод `onPause()` добавить приостановку мигания экрана при звонящем будильнике:
      ```java
      if (alarmVisualAnimator != null) {
-         alarmVisualAnimator.cancel();
-         alarmVisualAnimator = null;
-     }
-     if (mainRootLayout != null) {
-         mainRootLayout.setBackgroundColor(Color.BLACK);
+         if (android.os.Build.VERSION.SDK_INT >= 19) {
+             alarmVisualAnimator.pause();
+         } else {
+             alarmVisualAnimator.cancel();
+         }
      }
      ```
+   - В метод `onResume()` добавить возобновление мигания, если будильник все еще активен:
+     ```java
+     if (isAlarmSounding && alarmVisualAnimator != null) {
+         if (android.os.Build.VERSION.SDK_INT >= 19 && alarmVisualAnimator.isPaused()) {
+             alarmVisualAnimator.resume();
+         } else if (!alarmVisualAnimator.isRunning()) {
+             alarmVisualAnimator.start();
+         }
+     }
+     ```
+3. **Защита от некорректного IP-адреса (Crash Protection):**
+   - Обернуть блоки создания `Request.Builder().url(url)` в `fetchGlucoseData()` и `fetchIoBData()` в блоки `try-catch` для перехвата `IllegalArgumentException`. При возникновении исключения обрабатывать это как сетевую ошибку (показывать значок ошибки, скрывать IoB, выводить "---"), не допуская падения приложения.
+   - Использовать `serverIp.trim()` при формировании URL.
+
+---
+
+### SettingsActivity.java
+[MODIFY] [SettingsActivity.java](file:///h:/DiaNight/app/src/main/java/com/diaclock/nightstand/SettingsActivity.java)
+
+1. **Защита от некорректного IP-адреса в `testConnection`:**
+   - Обернуть создание тестового HTTP-запроса в `try-catch` для перехвата `IllegalArgumentException` на случай ввода некорректного IP. Выводить диалоговое окно об ошибке вместо крэша приложения.
+2. **Оптимизация автопоиска (OkHttpClient reuse):**
+   - Вынести создание `OkHttpClient` с короткими таймаутами из метода `verifyXdrip()` в `startNetworkAutoDiscovery()`.
+   - Создавать `scanningClient` один раз перед циклом сканирования 254 IP-адресов и передавать его параметром в `verifyXdrip`.
+   - Сохранять `scanningClient` в качестве приватного поля класса `SettingsActivity`.
+3. **Отмена фоновых запросов сканирования при закрытии настроек:**
+   - В методе `onDestroy()` вызывать `scanningClient.dispatcher().cancelAll();`, чтобы немедленно завершить все асинхронные HTTP-запросы сканирования, если пользователь закрыл экран настроек до окончания поиска.
 
 ---
 
 ## План верификации
 
 ### Автоматические тесты
-- Запустить сборку проекта через Gradle: `.\gradlew.bat assembleDebug` для проверки компиляции.
+- Сборка приложения через Gradle: `.\gradlew.bat assembleDebug`.
 
 ### Ручная верификация
-- Убедиться, что колокольчик скрывается через 15 секунд независимо от состояния тревоги.
-- Проверить, что при срабатывании тревоги фон экрана мягко пульсирует темно-красным цветом, а при откладывании (snooze) или нормализации сахара — возвращается к черному.
+- Ввод невалидного IP-адреса (например, с пробелом) в настройках и нажатие кнопки "Тест" / сохранение — приложение не должно падать.
+- Запуск автопоиска и закрытие экрана настроек до его окончания — проверка отсутствия утечек и остановка фоновых сетевых запросов.
