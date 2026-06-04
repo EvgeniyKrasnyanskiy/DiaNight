@@ -135,7 +135,27 @@ public class MainActivity extends AppCompatActivity {
     private static final long MAX_POLL_INTERVAL = 120000L; // 2 minutes max backoff
     
     // Runnable fields for explicit lifecycle control
-    private Runnable timeRunnable;
+    private final Runnable timeRunnable = new Runnable() {
+        @Override
+        public void run() {
+            Calendar c = Calendar.getInstance();
+            String hoursStr = String.format(Locale.US, "%02d", c.get(Calendar.HOUR_OF_DAY));
+            String minutesStr = String.format(Locale.US, "%02d", c.get(Calendar.MINUTE));
+
+            // Only update UI if text actually changed to reduce unnecessary rendering
+            if (!hoursStr.equals(lastDisplayedHours)) {
+                tvHours.setText(hoursStr);
+                lastDisplayedHours = hoursStr;
+            }
+            if (!minutesStr.equals(lastDisplayedMinutes)) {
+                tvMinutes.setText(minutesStr);
+                lastDisplayedMinutes = minutesStr;
+            }
+            
+            mainHandler.postDelayed(this, 1000); // Poll clock checks every second
+        }
+    };
+    private ValueAnimator alarmVisualAnimator = null;
     private String lastDisplayedHours = "";
     private String lastDisplayedMinutes = "";
 
@@ -215,14 +235,7 @@ public class MainActivity extends AppCompatActivity {
         }
         
         // Register battery monitor
-        if (!isBatteryReceiverRegistered) {
-            if (android.os.Build.VERSION.SDK_INT >= 33) {
-                registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED), Context.RECEIVER_NOT_EXPORTED);
-            } else {
-                registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-            }
-            isBatteryReceiverRegistered = true;
-        }
+        registerBatteryReceiver();
         
         // Start pixel shifting protection
         pixelShiftHandler.post(pixelShiftRunnable);
@@ -251,6 +264,14 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
+        // Resume battery monitoring
+        registerBatteryReceiver();
+
+        // Resume time updates and pixel shifting
+        startTimeUpdates();
+        pixelShiftHandler.removeCallbacks(pixelShiftRunnable);
+        pixelShiftHandler.post(pixelShiftRunnable);
+
         String oldSource = dataSource;
         boolean oldNightlight = nightlightMode;
         loadSettings();
@@ -278,10 +299,8 @@ public class MainActivity extends AppCompatActivity {
                 ivNetworkWarning.setVisibility(View.GONE);
             }
             
-            // If nightlight mode was previously active and is now disabled, restart the toggle cycle
-            if (oldNightlight) {
-                startToggleCycle();
-            }
+            // Restart the toggle cycle when app is active
+            startToggleCycle();
             
             // Resume/Start polling or broadcast receiver if needed
             if (!dataSource.equals(oldSource) || oldNightlight) {
@@ -322,6 +341,12 @@ public class MainActivity extends AppCompatActivity {
                 breathingAnimator.cancel();
             }
         }
+        mainHandler.removeCallbacks(timeRunnable);
+        mainHandler.removeCallbacks(networkRunnable);
+        mainHandler.removeCallbacks(toggleRunnable);
+        pixelShiftHandler.removeCallbacks(pixelShiftRunnable);
+        unregisterBatteryReceiver();
+        unregisterXdripReceiver();
     }
 
     @Override
@@ -343,14 +368,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Clean up battery receiver
-        if (isBatteryReceiverRegistered) {
-            try {
-                unregisterReceiver(batteryReceiver);
-            } catch (Exception e) {
-                Log.e(TAG, "Unregistering battery receiver failed: " + e.getMessage());
-            }
-            isBatteryReceiverRegistered = false;
-        }
+        unregisterBatteryReceiver();
 
         // Clean up xDrip receiver
         unregisterXdripReceiver();
@@ -361,6 +379,31 @@ public class MainActivity extends AppCompatActivity {
         // Clean up handlers
         pixelShiftHandler.removeCallbacksAndMessages(null);
         inactivityHandler.removeCallbacksAndMessages(null);
+    }
+
+    private void registerBatteryReceiver() {
+        if (!isBatteryReceiverRegistered) {
+            IntentFilter filter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(batteryReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(batteryReceiver, filter);
+            }
+            isBatteryReceiverRegistered = true;
+            Log.d(TAG, "BatteryReceiver registered.");
+        }
+    }
+
+    private void unregisterBatteryReceiver() {
+        if (isBatteryReceiverRegistered) {
+            try {
+                unregisterReceiver(batteryReceiver);
+            } catch (Exception e) {
+                Log.e(TAG, "Unregistering battery receiver failed: " + e.getMessage());
+            }
+            isBatteryReceiverRegistered = false;
+            Log.d(TAG, "BatteryReceiver unregistered.");
+        }
     }
 
     private void initViews() {
@@ -525,26 +568,7 @@ public class MainActivity extends AppCompatActivity {
 
     // 1. Time Update Logic
     private void startTimeUpdates() {
-        timeRunnable = new Runnable() {
-            @Override
-            public void run() {
-                Calendar c = Calendar.getInstance();
-                String hoursStr = String.format(Locale.US, "%02d", c.get(Calendar.HOUR_OF_DAY));
-                String minutesStr = String.format(Locale.US, "%02d", c.get(Calendar.MINUTE));
-
-                // Only update UI if text actually changed to reduce unnecessary rendering
-                if (!hoursStr.equals(lastDisplayedHours)) {
-                    tvHours.setText(hoursStr);
-                    lastDisplayedHours = hoursStr;
-                }
-                if (!minutesStr.equals(lastDisplayedMinutes)) {
-                    tvMinutes.setText(minutesStr);
-                    lastDisplayedMinutes = minutesStr;
-                }
-                
-                mainHandler.postDelayed(this, 1000); // Poll clock checks every second
-            }
-        };
+        mainHandler.removeCallbacks(timeRunnable);
         mainHandler.post(timeRunnable);
     }
 
@@ -968,6 +992,20 @@ public class MainActivity extends AppCompatActivity {
                 
                 isAlarmSounding = true;
                 mediaPlayer.start();
+
+                // Start gentle flashing animation pulsing the background between black and dark red
+                if (alarmVisualAnimator == null) {
+                    alarmVisualAnimator = ValueAnimator.ofObject(new android.animation.ArgbEvaluator(), Color.BLACK, Color.parseColor("#330000"));
+                    alarmVisualAnimator.setDuration(1500);
+                    alarmVisualAnimator.setRepeatCount(ValueAnimator.INFINITE);
+                    alarmVisualAnimator.setRepeatMode(ValueAnimator.REVERSE);
+                    alarmVisualAnimator.addUpdateListener(animation -> {
+                        if (mainRootLayout != null && !isActivityDestroyed) {
+                            mainRootLayout.setBackgroundColor((int) animation.getAnimatedValue());
+                        }
+                    });
+                    alarmVisualAnimator.start();
+                }
                 
                 // Schedule auto-snooze
                 mainHandler.removeCallbacks(autoSnoozeRunnable);
@@ -991,6 +1029,13 @@ public class MainActivity extends AppCompatActivity {
     private void stopAlarmSound() {
         isAlarmSounding = false;
         mainHandler.removeCallbacks(autoSnoozeRunnable);
+        if (alarmVisualAnimator != null) {
+            alarmVisualAnimator.cancel();
+            alarmVisualAnimator = null;
+        }
+        if (mainRootLayout != null) {
+            mainRootLayout.setBackgroundColor(Color.BLACK);
+        }
         if (mediaPlayer != null) {
             try {
                 if (mediaPlayer.isPlaying()) {
@@ -1116,11 +1161,7 @@ public class MainActivity extends AppCompatActivity {
         ivSettings.animate().alpha(0.0f).setDuration(1500).start();
         ivBatteryContainer.animate().alpha(0.0f).setDuration(1500).start();
         ivExit.animate().alpha(0.0f).setDuration(1500).start();
-        
-        // Task 7: Hide the alarm bell icon only if alarms are disabled
-        if (!alarmEnabled) {
-            ivAlarmBell.animate().alpha(0.0f).setDuration(1500).start();
-        }
+        ivAlarmBell.animate().alpha(0.0f).setDuration(1500).start();
     }
 
     /**
