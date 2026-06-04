@@ -31,13 +31,13 @@ public class TelemetryTracker {
     private static final String FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdwGtctq_69FE-k3v8XqPm-eXiBCfeKarTZ7ikDHhygXOLLcQ/formResponse"; 
     
     // Example: "entry.111111111"
-    private static final String ENTRY_MARKET = "entry.337109886"; 
+    private static final String ENTRY_MARKET = "entry.973733668"; 
     
     // Example: "entry.222222222"
-    private static final String ENTRY_VERSION = "entry.10982061"; 
+    private static final String ENTRY_VERSION = "entry.1320500795"; 
     
     // Example: "entry.333333333"
-    private static final String ENTRY_DEVICE = "entry.607409092"; 
+    private static final String ENTRY_DEVICE = "entry.74985038"; 
 
     public static void trackInstall(final Context context) {
         final SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
