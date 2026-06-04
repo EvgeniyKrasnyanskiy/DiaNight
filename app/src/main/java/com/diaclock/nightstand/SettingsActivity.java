@@ -811,13 +811,15 @@ public class SettingsActivity extends AppCompatActivity {
 
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                final int code = response.code();
-                android.util.Log.d("DiaNightScan", "HTTP verification response from " + targetIp + ": code=" + code);
-                response.close();
-
-                // 200 OK or 401 Unauthorized strongly proves it's indeed xDrip+ server!
-                if (code == 200 || code == 401) {
-                    discoveredDevices.add(new DiscoveredDevice(targetIp, code));
+                try {
+                    final int code = response.code();
+                    android.util.Log.d("DiaNightScan", "HTTP verification response from " + targetIp + ": code=" + code);
+                    // 200 OK or 401 Unauthorized strongly proves it's indeed xDrip+ server!
+                    if (code == 200 || code == 401) {
+                        discoveredDevices.add(new DiscoveredDevice(targetIp, code));
+                    }
+                } finally {
+                    response.close();
                 }
                 checkScanProgress(finishedCount, discoveredDevices, progressDialog, executor);
             }
