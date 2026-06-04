@@ -1,5 +1,7 @@
 package com.diaclock.nightstand;
 
+import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -16,6 +18,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.view.View;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -63,12 +66,22 @@ public class MainActivity extends AppCompatActivity {
 
     // Handlers and Runnables
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private final Handler breathingHandler = new Handler(Looper.getMainLooper());
     private final Handler inactivityHandler = new Handler(Looper.getMainLooper());
     private final Handler pixelShiftHandler = new Handler(Looper.getMainLooper());
     
+    // Breathing animation (hardware-accelerated via ObjectAnimator)
+    private ObjectAnimator breathingAnimator;
+    
+    // Lifecycle guard to prevent OkHttp callbacks from accessing destroyed Activity
+    private volatile boolean isActivityDestroyed = false;
+    private boolean isBatteryReceiverRegistered = false;
+    
     private boolean isControlsFaded = false;
     private final Runnable inactivityRunnable = this::fadeAttributesOut;
+    
+    // Cached views for pixel shift (avoid repeated findViewById)
+    private View centralClickArea;
+    private View statusBarContainer;
     
     private final Runnable pixelShiftRunnable = new Runnable() {
         @Override
@@ -77,19 +90,17 @@ public class MainActivity extends AppCompatActivity {
             float shiftX = (float) (Math.random() * 32 - 16);
             float shiftY = (float) (Math.random() * 32 - 16);
             
-            View viewToShift = findViewById(R.id.centralClickArea);
-            if (viewToShift != null) {
-                viewToShift.setTranslationX(shiftX);
-                viewToShift.setTranslationY(shiftY);
+            if (centralClickArea != null) {
+                centralClickArea.setTranslationX(shiftX);
+                centralClickArea.setTranslationY(shiftY);
             }
 
             // Shift the status bar container as well to prevent burn-in on top row icons (bell, gear, battery)
-            View statusBar = findViewById(R.id.statusBarContainer);
-            if (statusBar != null) {
+            if (statusBarContainer != null) {
                 float statusShiftX = (float) (Math.random() * 16 - 8);
                 float statusShiftY = (float) (Math.random() * 16 - 8);
-                statusBar.setTranslationX(statusShiftX);
-                statusBar.setTranslationY(statusShiftY);
+                statusBarContainer.setTranslationX(statusShiftX);
+                statusBarContainer.setTranslationY(statusShiftY);
             }
             
             // Repeat every 2 minutes
@@ -108,9 +119,20 @@ public class MainActivity extends AppCompatActivity {
     private final OkHttpClient httpClient = new OkHttpClient();
     private String serverIp = "192.168.0.111";
     private String apiSecret = "FBB9F80F9AC22E5B15F6DA1FFE599E14";
+    private String cachedSecretHash = null; // Cached SHA-1 hash of apiSecret
     private double lastGlucoseMmol = -1.0;
     private String lastDirection = "";
-    private boolean hasConnectionError = false;
+    private volatile boolean hasConnectionError = false;
+    
+    // Adaptive polling interval with exponential backoff on errors
+    private long networkPollInterval = 15000L; // 15 seconds base (CGMs update every 1-5 min)
+    private static final long BASE_POLL_INTERVAL = 15000L;
+    private static final long MAX_POLL_INTERVAL = 120000L; // 2 minutes max backoff
+    
+    // Runnable fields for explicit lifecycle control
+    private Runnable timeRunnable;
+    private String lastDisplayedHours = "";
+    private String lastDisplayedMinutes = "";
 
     // Alarm state variables
     private boolean alarmEnabled = true;
@@ -130,11 +152,6 @@ public class MainActivity extends AppCompatActivity {
 
     // Custom text color (default White)
     private int textColor = Color.WHITE;
-
-    // Breathing Animation variables
-    private float currentAlpha = 1.0f;
-    private boolean alphaDecreasing = true;
-    private final float alphaStep = 0.035f; // Slower breathing (2.0s period: 20 steps down, 20 steps up)
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -159,7 +176,6 @@ public class MainActivity extends AppCompatActivity {
 
         // Start tasks
         startTimeUpdates();
-        startBreathingAnimation();
         startToggleCycle();
         
         if (nightlightMode) {
@@ -178,10 +194,16 @@ public class MainActivity extends AppCompatActivity {
         }
         
         // Register battery monitor
-        registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        if (!isBatteryReceiverRegistered) {
+            registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            isBatteryReceiverRegistered = true;
+        }
         
         // Start pixel shifting protection
         pixelShiftHandler.post(pixelShiftRunnable);
+        
+        // Start breathing animation (hardware-accelerated)
+        startBreathingAnimation();
         
         // Initial inactivity trigger
         adjustTextSizes();
@@ -254,20 +276,33 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        isActivityDestroyed = true;
         super.onDestroy();
         stopAlarmSound();
         mainHandler.removeCallbacksAndMessages(null);
-        breathingHandler.removeCallbacksAndMessages(null);
+        
+        // Clean up breathing animation
+        if (breathingAnimator != null) {
+            breathingAnimator.cancel();
+            breathingAnimator = null;
+        }
         
         // Clean up battery receiver
-        try {
-            unregisterReceiver(batteryReceiver);
-        } catch (Exception e) {
-            Log.e(TAG, "Unregistering battery receiver failed: " + e.getMessage());
+        if (isBatteryReceiverRegistered) {
+            try {
+                unregisterReceiver(batteryReceiver);
+            } catch (Exception e) {
+                Log.e(TAG, "Unregistering battery receiver failed: " + e.getMessage());
+            }
+            isBatteryReceiverRegistered = false;
         }
         
         // Clean up xDrip receiver
         unregisterXdripReceiver();
+        
+        // Clean up OkHttp resources
+        httpClient.dispatcher().cancelAll();
+        httpClient.connectionPool().evictAll();
         
         // Clean up handlers
         pixelShiftHandler.removeCallbacksAndMessages(null);
@@ -291,6 +326,10 @@ public class MainActivity extends AppCompatActivity {
         ivBatteryContainer = findViewById(R.id.ivBatteryContainer);
         ivBatteryIcon = findViewById(R.id.ivBatteryIcon);
         tvBatteryPercent = findViewById(R.id.tvBatteryPercent);
+        
+        // Cache views used in pixelShiftRunnable to avoid repeated findViewById
+        centralClickArea = findViewById(R.id.centralClickArea);
+        statusBarContainer = findViewById(R.id.statusBarContainer);
     }
 
     private void loadSettings() {
@@ -302,6 +341,10 @@ public class MainActivity extends AppCompatActivity {
         textColor = prefs.getInt("text_color", Color.WHITE);
         dataSource = prefs.getString("data_source", "network");
         nightlightMode = prefs.getBoolean("nightlight_mode", false);
+        
+        // Cache SHA-1 hash of API secret to avoid recomputing on every request
+        cachedSecretHash = (apiSecret != null && !apiSecret.trim().isEmpty())
+                ? CryptoUtils.computeSHA1(apiSecret) : null;
     }
 
     private void setupListeners() {
@@ -426,46 +469,40 @@ public class MainActivity extends AppCompatActivity {
 
     // 1. Time Update Logic
     private void startTimeUpdates() {
-        Runnable timeRunnable = new Runnable() {
+        timeRunnable = new Runnable() {
             @Override
             public void run() {
                 Calendar c = Calendar.getInstance();
                 String hoursStr = String.format(Locale.US, "%02d", c.get(Calendar.HOUR_OF_DAY));
                 String minutesStr = String.format(Locale.US, "%02d", c.get(Calendar.MINUTE));
 
-                tvHours.setText(hoursStr);
-                tvMinutes.setText(minutesStr);
+                // Only update UI if text actually changed to reduce unnecessary rendering
+                if (!hoursStr.equals(lastDisplayedHours)) {
+                    tvHours.setText(hoursStr);
+                    lastDisplayedHours = hoursStr;
+                }
+                if (!minutesStr.equals(lastDisplayedMinutes)) {
+                    tvMinutes.setText(minutesStr);
+                    lastDisplayedMinutes = minutesStr;
+                }
                 
-                applyTextColor();
                 mainHandler.postDelayed(this, 1000); // Poll clock checks every second
             }
         };
         mainHandler.post(timeRunnable);
     }
 
-    // 2. Colon Breathing Animation powered strictly by a Handler
+    // 2. Colon Breathing Animation powered by hardware-accelerated ObjectAnimator
     private void startBreathingAnimation() {
-        Runnable breathingRunnable = new Runnable() {
-            @Override
-            public void run() {
-                if (alphaDecreasing) {
-                    currentAlpha -= alphaStep;
-                    if (currentAlpha <= 0.3f) {
-                        currentAlpha = 0.3f;
-                        alphaDecreasing = false;
-                    }
-                } else {
-                    currentAlpha += alphaStep;
-                    if (currentAlpha >= 1.0f) {
-                        currentAlpha = 1.0f;
-                        alphaDecreasing = true;
-                    }
-                }
-                tvColon.setAlpha(currentAlpha);
-                breathingHandler.postDelayed(this, 50);
-            }
-        };
-        breathingHandler.post(breathingRunnable);
+        if (breathingAnimator != null) {
+            breathingAnimator.cancel();
+        }
+        breathingAnimator = ObjectAnimator.ofFloat(tvColon, "alpha", 1.0f, 0.3f);
+        breathingAnimator.setDuration(1000); // 1 second fade down
+        breathingAnimator.setRepeatCount(ValueAnimator.INFINITE);
+        breathingAnimator.setRepeatMode(ValueAnimator.REVERSE);
+        breathingAnimator.setInterpolator(new AccelerateDecelerateInterpolator());
+        breathingAnimator.start();
     }
 
     // 3. Central view toggling Handler
@@ -502,13 +539,13 @@ public class MainActivity extends AppCompatActivity {
         mainHandler.postDelayed(toggleRunnable, toggleIntervalSeconds * 1000L);
     }
 
-    // 4. Nightscout / xDrip Network Integration
+    // 4. Nightscout / xDrip Network Integration with adaptive polling interval
     private final Runnable networkRunnable = new Runnable() {
         @Override
         public void run() {
-            if ("network".equals(dataSource)) {
+            if ("network".equals(dataSource) && !isActivityDestroyed) {
                 fetchGlucoseData();
-                mainHandler.postDelayed(this, 10000L); // Pull every 10s
+                mainHandler.postDelayed(this, networkPollInterval);
             }
         }
     };
@@ -520,21 +557,12 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private String computeSHA1(String input) {
-        try {
-            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-1");
-            byte[] messageDigest = md.digest(input.getBytes("UTF-8"));
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : messageDigest) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) hexString.append('0');
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        } catch (Exception e) {
-            Log.e(TAG, "SHA-1 hashing failed: " + e.getMessage());
-            return input;
-        }
+    /**
+     * Returns the cached SHA-1 hash of the API secret.
+     * The hash is computed once in loadSettings() and cached in cachedSecretHash.
+     */
+    private String getSecretHash() {
+        return cachedSecretHash;
     }
 
     private void fetchGlucoseData() {
@@ -546,9 +574,8 @@ public class MainActivity extends AppCompatActivity {
         String url = "http://" + serverIp + ":17580/sgv.json";
         
         Request.Builder requestBuilder = new Request.Builder().url(url);
-        if (apiSecret != null && !apiSecret.trim().isEmpty()) {
-            String hashedSecret = computeSHA1(apiSecret);
-            requestBuilder.addHeader("api-secret", hashedSecret);
+        if (cachedSecretHash != null) {
+            requestBuilder.addHeader("api-secret", cachedSecretHash);
         }
         Request request = requestBuilder.build();
 
@@ -556,6 +583,9 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 Log.e(TAG, "Network call failed: " + e.getMessage());
+                // Exponential backoff on network errors
+                networkPollInterval = Math.min(networkPollInterval * 2, MAX_POLL_INTERVAL);
+                if (isActivityDestroyed) return;
                 runOnUiThread(() -> {
                     showNetworkWarning(true);
                     tvGlucose.setText("---");
@@ -569,6 +599,8 @@ public class MainActivity extends AppCompatActivity {
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 try {
                     if (!response.isSuccessful()) {
+                        networkPollInterval = Math.min(networkPollInterval * 2, MAX_POLL_INTERVAL);
+                        if (isActivityDestroyed) return;
                         runOnUiThread(() -> {
                             showNetworkWarning(true);
                             tvGlucose.setText("---");
@@ -604,11 +636,16 @@ public class MainActivity extends AppCompatActivity {
 
                         if (sgv > 0) {
                             final double glucoseMmol = sgv / 18.0;
-                            lastGlucoseMmol = glucoseMmol;
                             final String finalDirection = direction;
-                            lastDirection = direction;
                             
+                            // Reset polling interval on successful data fetch
+                            networkPollInterval = BASE_POLL_INTERVAL;
+                            
+                            if (isActivityDestroyed) return;
                             runOnUiThread(() -> {
+                                // Update shared state on UI thread to prevent data races
+                                lastGlucoseMmol = glucoseMmol;
+                                lastDirection = finalDirection;
                                 showNetworkWarning(false);
                                 tvGlucose.setText(String.format(Locale.US, "%.1f%s", glucoseMmol, getTrendArrow(finalDirection)));
                                 adjustGlucoseAndIoBTextSizes();
@@ -619,6 +656,7 @@ public class MainActivity extends AppCompatActivity {
                             // Fetch IoB from the separate /pebble endpoint
                             fetchIoBData();
                         } else {
+                            if (isActivityDestroyed) return;
                             runOnUiThread(() -> {
                                 showNetworkWarning(true);
                                 tvGlucose.setText("---");
@@ -629,6 +667,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                     } catch (Exception e) {
                         Log.e(TAG, "Parsing SGV JSON failed: " + e.getMessage());
+                        if (isActivityDestroyed) return;
                         runOnUiThread(() -> {
                             showNetworkWarning(true);
                             tvGlucose.setText("---");
@@ -653,9 +692,8 @@ public class MainActivity extends AppCompatActivity {
         String pebbleUrl = "http://" + serverIp + ":17580/pebble";
         
         Request.Builder requestBuilder = new Request.Builder().url(pebbleUrl);
-        if (apiSecret != null && !apiSecret.trim().isEmpty()) {
-            String hashedSecret = computeSHA1(apiSecret);
-            requestBuilder.addHeader("api-secret", hashedSecret);
+        if (cachedSecretHash != null) {
+            requestBuilder.addHeader("api-secret", cachedSecretHash);
         }
         Request pebbleRequest = requestBuilder.build();
 
@@ -663,6 +701,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 Log.d(TAG, "Pebble IoB fetch failed: " + e.getMessage());
+                if (isActivityDestroyed) return;
                 runOnUiThread(() -> tvIoB.setVisibility(View.GONE));
             }
 
@@ -670,7 +709,9 @@ public class MainActivity extends AppCompatActivity {
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 try {
                     if (!response.isSuccessful()) {
-                        runOnUiThread(() -> tvIoB.setVisibility(View.GONE));
+                        if (!isActivityDestroyed) {
+                            runOnUiThread(() -> tvIoB.setVisibility(View.GONE));
+                        }
                         return;
                     }
 
@@ -711,6 +752,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                         
                         final double finalIob = iobValue;
+                        if (isActivityDestroyed) return;
                         runOnUiThread(() -> {
                             if (finalIob >= 0) {
                                 tvIoB.setText(String.format(Locale.US, "%.2f", finalIob));
@@ -723,6 +765,7 @@ public class MainActivity extends AppCompatActivity {
                         });
                     } catch (Exception e) {
                         Log.e(TAG, "Parsing Pebble IoB failed: " + e.getMessage());
+                        if (isActivityDestroyed) return;
                         runOnUiThread(() -> {
                             tvIoB.setVisibility(View.GONE);
                             adjustGlucoseAndIoBTextSizes();
@@ -839,6 +882,9 @@ public class MainActivity extends AppCompatActivity {
             stopAlarmSound();
             return;
         }
+        
+        // Early exit if alarm is already playing to prevent race conditions
+        if (isAlarmSounding) return;
 
         if (mediaPlayer == null) {
             try {

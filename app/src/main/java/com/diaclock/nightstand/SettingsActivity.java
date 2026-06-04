@@ -105,6 +105,12 @@ public class SettingsActivity extends AppCompatActivity {
     private String selectedRingtoneUri = null;
     private MediaPlayer testMediaPlayer = null;
     private java.util.concurrent.ExecutorService scanExecutor = null;
+    
+    // Shared OkHttpClient for all network operations in this Activity
+    private static final OkHttpClient sharedClient = new OkHttpClient.Builder()
+            .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+            .build();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -766,7 +772,8 @@ public class SettingsActivity extends AppCompatActivity {
                                        final java.util.concurrent.ExecutorService executor) {
         String url = "http://" + targetIp + ":17580/sgv.json?brief_mode=Y";
         
-        OkHttpClient singleClient = new OkHttpClient.Builder()
+        // Reuse shared client's connection pool with short timeouts for scan verification
+        OkHttpClient singleClient = sharedClient.newBuilder()
                 .connectTimeout(1500, java.util.concurrent.TimeUnit.MILLISECONDS)
                 .readTimeout(1500, java.util.concurrent.TimeUnit.MILLISECONDS)
                 .build();
@@ -774,7 +781,7 @@ public class SettingsActivity extends AppCompatActivity {
         final String secret = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
         okhttp3.Request.Builder requestBuilder = new okhttp3.Request.Builder().url(url);
         if (!secret.isEmpty()) {
-            String hashedSecret = computeSHA1(secret);
+            String hashedSecret = CryptoUtils.computeSHA1(secret);
             requestBuilder.addHeader("api-secret", hashedSecret);
             android.util.Log.d("DiaNightScan", "Verifying IP " + targetIp + " with SHA-1 hashed api-secret header");
         }
@@ -804,6 +811,7 @@ public class SettingsActivity extends AppCompatActivity {
                     editor.apply();
 
                     runOnUiThread(() -> {
+                        if (isFinishing() || isDestroyed()) return;
                         etIpAddress.setText(targetIp);
                         etIpAddress.requestFocus();
                         progressDialog.dismiss();
@@ -833,6 +841,7 @@ public class SettingsActivity extends AppCompatActivity {
         if (current >= 254 && !found.get()) {
             executor.shutdown();
             runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) return;
                 progressDialog.dismiss();
                 Toast.makeText(SettingsActivity.this, getString(R.string.msg_xdrip_not_found), Toast.LENGTH_LONG).show();
             });
@@ -871,20 +880,16 @@ public class SettingsActivity extends AppCompatActivity {
         
         okhttp3.Request.Builder requestBuilder = new okhttp3.Request.Builder().url(url);
         if (!secret.isEmpty()) {
-            String hashedSecret = computeSHA1(secret);
+            String hashedSecret = CryptoUtils.computeSHA1(secret);
             requestBuilder.addHeader("api-secret", hashedSecret);
         }
         okhttp3.Request request = requestBuilder.build();
 
-        OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
-                .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
-                .build();
-
-        client.newCall(request).enqueue(new okhttp3.Callback() {
+        sharedClient.newCall(request).enqueue(new okhttp3.Callback() {
             @Override
             public void onFailure(@NonNull okhttp3.Call call, @NonNull IOException e) {
                 runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
                     progressDialog.dismiss();
                     new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                             .setTitle(getString(R.string.dialog_test_error_title))
@@ -901,6 +906,7 @@ public class SettingsActivity extends AppCompatActivity {
                 response.close();
 
                 runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
                     progressDialog.dismiss();
                     if (code == 200) {
                         new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
@@ -926,21 +932,12 @@ public class SettingsActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * @deprecated Use {@link CryptoUtils#computeSHA1(String)} instead.
+     * Kept temporarily for backward compatibility reference.
+     */
     private String computeSHA1(String input) {
-        try {
-            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-1");
-            byte[] messageDigest = md.digest(input.getBytes("UTF-8"));
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : messageDigest) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) hexString.append('0');
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        } catch (Exception e) {
-            android.util.Log.e("DiaNightScan", "SHA-1 hashing failed: " + e.getMessage());
-            return input;
-        }
+        return CryptoUtils.computeSHA1(input);
     }
 
     private void updateCoreSetupInteractivity(boolean isNetwork) {
@@ -964,14 +961,10 @@ public class SettingsActivity extends AppCompatActivity {
                 .addHeader("User-Agent", "DiaNight-App")
                 .build();
                 
-        OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
-                .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
-                .build();
-                
-        client.newCall(request).enqueue(new Callback() {
+        sharedClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                if (isFinishing() || isDestroyed()) return;
                 runOnUiThread(() -> {
                     tvUpdateStatus.setText(getString(R.string.msg_update_check_failed));
                     if (!silent) {
@@ -983,6 +976,10 @@ public class SettingsActivity extends AppCompatActivity {
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 if (!response.isSuccessful()) {
+                    if (isFinishing() || isDestroyed()) {
+                        response.close();
+                        return;
+                    }
                     runOnUiThread(() -> {
                         tvUpdateStatus.setText(getString(R.string.msg_update_check_error_code, response.code()));
                         if (!silent) {
@@ -1029,6 +1026,7 @@ public class SettingsActivity extends AppCompatActivity {
                     final String finalApkUrl = apkUrl;
                     
                     runOnUiThread(() -> {
+                        if (isFinishing() || isDestroyed()) return;
                         if (isNewer) {
                             tvUpdateStatus.setText(getString(R.string.msg_update_available, remoteVer, localVer));
                             btnDownloadUpdate.setVisibility(View.VISIBLE);
@@ -1053,6 +1051,7 @@ public class SettingsActivity extends AppCompatActivity {
                         }
                     });
                 } catch (Exception e) {
+                    if (isFinishing() || isDestroyed()) return;
                     runOnUiThread(() -> {
                         tvUpdateStatus.setText(getString(R.string.msg_update_parse_error));
                         if (!silent) {
