@@ -204,9 +204,9 @@ public class SettingsActivity extends AppCompatActivity {
         // Display actual application version dynamically from PackageInfo
         try {
             String versionName = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-            tvVersionInfo.setText("Версия: " + versionName);
+            tvVersionInfo.setText(getString(R.string.label_version) + ": " + versionName);
         } catch (Exception e) {
-            tvVersionInfo.setText("Версия: 1.1");
+            tvVersionInfo.setText(getString(R.string.label_version) + ": 1.1");
         }
 
         // Load new settings
@@ -214,12 +214,12 @@ public class SettingsActivity extends AppCompatActivity {
         if ("broadcast".equals(dataSource)) {
             rbSourceBroadcast.setChecked(true);
             updateCoreSetupInteractivity(false);
-            tvDataSourceHint.setText("Локальный режим работает без сети через встроенный обмен на одном телефоне. Внимание: при локальном обмене (Broadcast) значение активного инсулина (IoB) не передается и не отображается.");
+            tvDataSourceHint.setText(getString(R.string.hint_source_broadcast));
             tvDataSourceHint.setTextColor(getResources().getColor(R.color.color_warning_orange));
         } else {
             rbSourceNetwork.setChecked(true);
             updateCoreSetupInteractivity(true);
-            tvDataSourceHint.setText("Сетевой режим требует настройки IP-адреса и ключа API Secret. Локальный режим работает без сети через встроенный обмен на одном телефоне.");
+            tvDataSourceHint.setText(getString(R.string.hint_source_network));
             tvDataSourceHint.setTextColor(getResources().getColor(R.color.text_secondary));
         }
 
@@ -265,17 +265,17 @@ public class SettingsActivity extends AppCompatActivity {
         if (selectedRingtoneUri == null) {
             tvRingtoneName.setText(getString(R.string.default_ringtone_name));
         } else if (selectedRingtoneUri.equals("silent")) {
-            tvRingtoneName.setText("Без звука 🔕");
+            tvRingtoneName.setText(getString(R.string.ringtone_silent));
         } else {
             try {
                 Ringtone r = RingtoneManager.getRingtone(this, Uri.parse(selectedRingtoneUri));
                 if (r != null) {
                     tvRingtoneName.setText(r.getTitle(this));
                 } else {
-                    tvRingtoneName.setText("Пользовательский сигнал 🔔");
+                    tvRingtoneName.setText(getString(R.string.ringtone_custom));
                 }
             } catch (Exception e) {
-                tvRingtoneName.setText("Сигнал по умолчанию 🔔");
+                tvRingtoneName.setText(getString(R.string.ringtone_default));
             }
         }
     }
@@ -289,10 +289,10 @@ public class SettingsActivity extends AppCompatActivity {
             boolean isNetwork = checkedId == R.id.rbSourceNetwork;
             updateCoreSetupInteractivity(isNetwork);
             if (isNetwork) {
-                tvDataSourceHint.setText("Сетевой режим требует настройки IP-адреса и ключа API Secret. Локальный режим работает без сети через встроенный обмен на одном телефоне.");
+                tvDataSourceHint.setText(getString(R.string.hint_source_network));
                 tvDataSourceHint.setTextColor(getResources().getColor(R.color.text_secondary));
             } else {
-                tvDataSourceHint.setText("Локальный режим работает без сети через встроенный обмен на одном телефоне. Внимание: при локальном обмене (Broadcast) значение активного инсулина (IoB) не передается и не отображается.");
+                tvDataSourceHint.setText(getString(R.string.hint_source_broadcast));
                 tvDataSourceHint.setTextColor(getResources().getColor(R.color.color_warning_orange));
             }
         });
@@ -303,7 +303,7 @@ public class SettingsActivity extends AppCompatActivity {
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl)));
                 } catch (Exception e) {
-                    Toast.makeText(this, "Не удалось открыть браузер", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.err_open_browser), Toast.LENGTH_SHORT).show();
                 }
             }
         });
@@ -330,7 +330,7 @@ public class SettingsActivity extends AppCompatActivity {
         btnChooseRingtone.setOnClickListener(v -> {
             Intent intent = new Intent(RingtoneManager.ACTION_RINGTONE_PICKER);
             intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM | RingtoneManager.TYPE_NOTIFICATION);
-            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Выберите мелодию тревоги");
+            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, getString(R.string.title_choose_ringtone));
             intent.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true);
             intent.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true);
             if (selectedRingtoneUri != null && !selectedRingtoneUri.equals("silent")) {
@@ -449,7 +449,7 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void startTestAlarm() {
         if (selectedRingtoneUri != null && selectedRingtoneUri.equals("silent")) {
-            Toast.makeText(this, "Выбран бесшумный режим", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.msg_silent_mode), Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -474,7 +474,7 @@ public class SettingsActivity extends AppCompatActivity {
             // Automatically restore button label when playback finishes
             testMediaPlayer.setOnCompletionListener(mp -> stopTestAlarm());
         } catch (Exception e) {
-            Toast.makeText(this, "Не удалось запустить воспроизведение", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.err_play_ringtone), Toast.LENGTH_SHORT).show();
             stopTestAlarm();
         }
     }
@@ -538,7 +538,7 @@ public class SettingsActivity extends AppCompatActivity {
                 return;
             }
         } catch (NumberFormatException e) {
-            showToast("Введите корректные десятичные значения для порогов Дня");
+            showToast(getString(R.string.err_invalid_day_thresholds));
             return;
         }
 
@@ -554,7 +554,7 @@ public class SettingsActivity extends AppCompatActivity {
                 return;
             }
         } catch (NumberFormatException e) {
-            showToast("Введите корректные десятичные значения для порогов Ночи");
+            showToast(getString(R.string.err_invalid_night_thresholds));
             return;
         }
 
@@ -670,9 +670,9 @@ public class SettingsActivity extends AppCompatActivity {
         String secretKey = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
         if (secretKey.isEmpty()) {
             new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                    .setTitle("Требуется секретный ключ")
-                    .setMessage("Автопоиск возможен только с ключом!\n\nПожалуйста, введите «Секретный ключ веб-службы (API Secret)» перед запуском автопоиска.")
-                    .setPositiveButton("ОК", null)
+                    .setTitle(getString(R.string.dialog_api_secret_required_title))
+                    .setMessage(getString(R.string.dialog_api_secret_required_msg))
+                    .setPositiveButton(getString(R.string.btn_ok), null)
                     .show();
             return;
         }
@@ -706,8 +706,8 @@ public class SettingsActivity extends AppCompatActivity {
         android.util.Log.d("DiaNightScan", "Final scanning subnet prefix: " + subnetPrefix);
 
         final ProgressDialog progressDialog = new ProgressDialog(this);
-        progressDialog.setTitle("Автопоиск мастера");
-        progressDialog.setMessage("Сканирование подсети: " + subnetPrefix + "X\nПожалуйста, подождите...");
+        progressDialog.setTitle(getString(R.string.dialog_scan_title));
+        progressDialog.setMessage(getString(R.string.dialog_scan_msg_format, subnetPrefix));
         progressDialog.setCancelable(false);
         progressDialog.show();
         
@@ -808,14 +808,14 @@ public class SettingsActivity extends AppCompatActivity {
                         etIpAddress.requestFocus();
                         progressDialog.dismiss();
                         if (code == 401) {
-                            Toast.makeText(SettingsActivity.this, "xDrip+ найден! IP: " + targetIp + "\nНо требуется авторизация. Пожалуйста, проверьте API Secret!", Toast.LENGTH_LONG).show();
+                            Toast.makeText(SettingsActivity.this, getString(R.string.msg_xdrip_found_auth_required, targetIp), Toast.LENGTH_LONG).show();
                             new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                                    .setTitle("xDrip+ найден!")
-                                    .setMessage("Мастер-устройство успешно обнаружено на IP: " + targetIp + ".\n\nОднако на нём включена защита. Убедитесь, что вы ввели правильный «Секретный ключ веб-службы (API Secret)» ниже, иначе данные не будут поступать.")
-                                    .setPositiveButton("ОК", null)
+                                    .setTitle(getString(R.string.dialog_xdrip_found_auth_required_title))
+                                    .setMessage(getString(R.string.dialog_xdrip_found_auth_required_msg, targetIp))
+                                    .setPositiveButton(getString(R.string.btn_ok), null)
                                     .show();
                         } else {
-                            Toast.makeText(SettingsActivity.this, "xDrip+ успешно найден! IP: " + targetIp, Toast.LENGTH_LONG).show();
+                            Toast.makeText(SettingsActivity.this, getString(R.string.msg_xdrip_found_success, targetIp), Toast.LENGTH_LONG).show();
                         }
                     });
                 } else {
@@ -834,32 +834,18 @@ public class SettingsActivity extends AppCompatActivity {
             executor.shutdown();
             runOnUiThread(() -> {
                 progressDialog.dismiss();
-                Toast.makeText(SettingsActivity.this, "xDrip+ не найден в вашей Wi-Fi сети. Убедитесь, что веб-служба включена в xDrip+.", Toast.LENGTH_LONG).show();
+                Toast.makeText(SettingsActivity.this, getString(R.string.msg_xdrip_not_found), Toast.LENGTH_LONG).show();
             });
         }
     }
 
     private void showHelpDialog() {
-        String helpText = "Как настроить DiaNight:\n\n" +
-                "1. На смартфоне-мастере с xDrip+:\n" +
-                "   • Откройте xDrip+ -> Настройки -> Настройки межпрограммного взаимодействия (Inter-app settings).\n" +
-                "   • Включите «Локальный веб-сервер» (Local Web Service).\n" +
-                "   • Включите «Локальное вещание» (Broadcast locally).\n" +
-                "   • В поле «Секретный ключ веб-службы» (API Secret) задайте или скопируйте ключ (минимум 12 символов).\n\n" +
-                "2. Настройка смартфона DiaNight:\n" +
-                "   • Подключите оба устройства к одной Wi-Fi сети.\n" +
-                "   • Нажмите кнопку «Автопоиск (Beta)» под настройками для автоматического нахождения мастера.\n" +
-                "   • Если автопоиск не сработал, введите IP-адрес мастера вручную.\n" +
-                "   • Введите API Secret точно такой же, как в xDrip+.\n" +
-                "   • Для быстрой проверки нажмите кнопку «Проверить связь».\n" +
-                "   • Нажмите «Сохранить».\n\n" +
-                "3. Оптимизация батареи (ВАЖНО!):\n" +
-                "   • В настройках Android обоих смартфонов отключите оптимизацию батареи для xDrip+ и DiaNight, чтобы система не закрывала их ночью.";
+        String helpText = getString(R.string.help_manual_text);
 
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Инструкция по настройке")
+                .setTitle(getString(R.string.dialog_help_title))
                 .setMessage(helpText)
-                .setPositiveButton("Понятно", null)
+                .setPositiveButton(getString(R.string.btn_ok), null)
                 .show();
     }
 
@@ -871,13 +857,13 @@ public class SettingsActivity extends AppCompatActivity {
         final String secret = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
         
         if (ip.isEmpty()) {
-            Toast.makeText(this, "Пожалуйста, введите IP-адрес для проверки", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.err_empty_ip), Toast.LENGTH_SHORT).show();
             return;
         }
 
         final ProgressDialog progressDialog = new ProgressDialog(this);
-        progressDialog.setTitle("Проверка связи");
-        progressDialog.setMessage("Подключение к xDrip+ по адресу " + ip + "...");
+        progressDialog.setTitle(getString(R.string.dialog_test_connection_title));
+        progressDialog.setMessage(getString(R.string.dialog_test_connection_msg, ip));
         progressDialog.setCancelable(false);
         progressDialog.show();
 
@@ -901,9 +887,9 @@ public class SettingsActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     progressDialog.dismiss();
                     new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                            .setTitle("Ошибка связи ❌")
-                            .setMessage("Не удалось подключиться к xDrip+ по адресу:\n" + ip + "\n\nДетали ошибки:\n" + e.getMessage() + "\n\nУбедитесь, что:\n1. Оба телефона подключены к одной Wi-Fi сети.\n2. На мастере в настройках xDrip+ включен «Локальный веб-сервер» в Inter-app settings.")
-                            .setPositiveButton("ОК", null)
+                            .setTitle(getString(R.string.dialog_test_error_title))
+                            .setMessage(getString(R.string.dialog_test_error_msg, ip, e.getMessage()))
+                            .setPositiveButton(getString(R.string.btn_ok), null)
                             .show();
                 });
             }
@@ -918,21 +904,21 @@ public class SettingsActivity extends AppCompatActivity {
                     progressDialog.dismiss();
                     if (code == 200) {
                         new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                                .setTitle("Успешно! ✅")
-                                .setMessage("Связь с xDrip+ успешно установлена!\n\nКод ответа: 200 OK\nУстройство найдено, данные читаются корректно.")
-                                .setPositiveButton("Отлично", null)
+                                .setTitle(getString(R.string.dialog_test_success_title))
+                                .setMessage(getString(R.string.dialog_test_success_msg))
+                                .setPositiveButton(getString(R.string.dialog_test_success_btn), null)
                                 .show();
                     } else if (code == 401) {
                         new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                                .setTitle("Требуется авторизация ⚠️")
-                                .setMessage("Связь с xDrip+ установлена (устройство найдено), но сервер отклонил запрос с кодом 401 (Unauthorized).\n\nПожалуйста, убедитесь, что вы правильно ввели «Секретный ключ веб-службы (API Secret)»!")
-                                .setPositiveButton("ОК", null)
+                                .setTitle(getString(R.string.dialog_test_auth_title))
+                                .setMessage(getString(R.string.dialog_test_auth_msg))
+                                .setPositiveButton(getString(R.string.btn_ok), null)
                                 .show();
                     } else {
                         new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                                .setTitle("Необычный ответ ℹ️")
-                                .setMessage("Подключение удалось, но сервер xDrip+ вернул код: " + code + ".\n\nОтвет сервера:\n" + responseBody)
-                                .setPositiveButton("ОК", null)
+                                .setTitle(getString(R.string.dialog_test_unknown_title))
+                                .setMessage(getString(R.string.dialog_test_unknown_msg, code, responseBody))
+                                .setPositiveButton(getString(R.string.btn_ok), null)
                                 .show();
                     }
                 });
@@ -968,7 +954,7 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void checkForUpdates(boolean silent) {
         if (!silent) {
-            runOnUiThread(() -> tvUpdateStatus.setText("Проверка обновлений..."));
+            runOnUiThread(() -> tvUpdateStatus.setText(getString(R.string.msg_checking_updates)));
         }
         
         String url = "https://api.github.com/repos/EvgeniyKrasnyanskiy/DiaNight/releases/latest";
@@ -987,9 +973,9 @@ public class SettingsActivity extends AppCompatActivity {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 runOnUiThread(() -> {
-                    tvUpdateStatus.setText("Не удалось проверить обновления");
+                    tvUpdateStatus.setText(getString(R.string.msg_update_check_failed));
                     if (!silent) {
-                        Toast.makeText(SettingsActivity.this, "Ошибка проверки обновлений", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(SettingsActivity.this, getString(R.string.err_update_check), Toast.LENGTH_SHORT).show();
                     }
                 });
             }
@@ -998,9 +984,9 @@ public class SettingsActivity extends AppCompatActivity {
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 if (!response.isSuccessful()) {
                     runOnUiThread(() -> {
-                        tvUpdateStatus.setText("Ошибка при проверке обновлений (код: " + response.code() + ")");
+                        tvUpdateStatus.setText(getString(R.string.msg_update_check_error_code, response.code()));
                         if (!silent) {
-                            Toast.makeText(SettingsActivity.this, "Ошибка проверки: " + response.code(), Toast.LENGTH_SHORT).show();
+                            Toast.makeText(SettingsActivity.this, getString(R.string.err_update_check_code, response.code()), Toast.LENGTH_SHORT).show();
                         }
                     });
                     response.close();
@@ -1044,33 +1030,33 @@ public class SettingsActivity extends AppCompatActivity {
                     
                     runOnUiThread(() -> {
                         if (isNewer) {
-                            tvUpdateStatus.setText("Доступна новая версия: " + remoteVer + " (у вас: " + localVer + ")");
+                            tvUpdateStatus.setText(getString(R.string.msg_update_available, remoteVer, localVer));
                             btnDownloadUpdate.setVisibility(View.VISIBLE);
                             downloadUrl = finalApkUrl;
                             if (!silent) {
                                 new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                                        .setTitle("Доступно обновление! 🎉")
-                                        .setMessage("Найдена новая версия приложения: " + remoteVer + ".\n\nЖелаете скачать обновление?")
-                                        .setPositiveButton("Скачать", (dialog, which) -> {
+                                        .setTitle(getString(R.string.dialog_update_title))
+                                        .setMessage(getString(R.string.dialog_update_msg, remoteVer))
+                                        .setPositiveButton(getString(R.string.btn_download), (dialog, which) -> {
                                             startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(finalApkUrl)));
                                         })
-                                        .setNegativeButton("Отмена", null)
+                                        .setNegativeButton(getString(R.string.btn_cancel), null)
                                         .show();
-                                Toast.makeText(SettingsActivity.this, "Доступно обновление " + remoteVer, Toast.LENGTH_LONG).show();
+                                Toast.makeText(SettingsActivity.this, getString(R.string.msg_update_toast, remoteVer), Toast.LENGTH_LONG).show();
                             }
                         } else {
-                            tvUpdateStatus.setText("Установлена актуальная версия: " + localVer);
+                            tvUpdateStatus.setText(getString(R.string.msg_up_to_date, localVer));
                             btnDownloadUpdate.setVisibility(View.GONE);
                             if (!silent) {
-                                Toast.makeText(SettingsActivity.this, "У вас установлена последняя версия", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(SettingsActivity.this, getString(R.string.msg_no_updates), Toast.LENGTH_SHORT).show();
                             }
                         }
                     });
                 } catch (Exception e) {
                     runOnUiThread(() -> {
-                        tvUpdateStatus.setText("Ошибка разбора ответа обновлений");
+                        tvUpdateStatus.setText(getString(R.string.msg_update_parse_error));
                         if (!silent) {
-                            Toast.makeText(SettingsActivity.this, "Ошибка разбора ответа", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(SettingsActivity.this, getString(R.string.err_update_parse), Toast.LENGTH_SHORT).show();
                         }
                     });
                 }
