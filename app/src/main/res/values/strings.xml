@@ -56,6 +56,7 @@
     <string name="msg_invalid_thresholds">High threshold must be greater than low threshold</string>
     <string name="msg_invalid_time_format">Enter time in HH:mm format (e.g., 08:00)</string>
     <string name="msg_saved">Settings saved successfully</string>
+    <string name="msg_auto_discovered_master">Found new Master IP: %s</string>
     
     <!-- Alarm Hints -->
     <string name="hint_bell_active">Alarm enabled 🔔</string>

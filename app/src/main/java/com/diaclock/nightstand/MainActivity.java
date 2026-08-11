@@ -129,6 +129,10 @@ public class MainActivity extends AppCompatActivity {
     private String lastDirection = "";
     private volatile boolean hasConnectionError = false;
     
+    // Automatic background master IP discovery fields
+    private volatile int consecutiveNetworkFailures = 0;
+    private volatile boolean isAutoScanningSubnet = false;
+    
     // Adaptive polling interval with exponential backoff on errors
     private volatile long networkPollInterval = 15000L; // 15 seconds base (CGMs update every 1-5 min)
     private static final long BASE_POLL_INTERVAL = 15000L;
@@ -681,8 +685,11 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onFailure(@NonNull Call call, @NonNull IOException e) {
                     Log.e(TAG, "Network call failed: " + e.getMessage());
-                    // Exponential backoff on network errors
                     networkPollInterval = Math.min(networkPollInterval * 2, MAX_POLL_INTERVAL);
+                    consecutiveNetworkFailures++;
+                    if (consecutiveNetworkFailures >= 3 && !isAutoScanningSubnet) {
+                        triggerSilentSubnetAutoDiscovery();
+                    }
                     if (isActivityDestroyed) return;
                     runOnUiThread(() -> {
                         showNetworkWarning(true);
@@ -698,6 +705,10 @@ public class MainActivity extends AppCompatActivity {
                     try {
                         if (!response.isSuccessful()) {
                             networkPollInterval = Math.min(networkPollInterval * 2, MAX_POLL_INTERVAL);
+                            consecutiveNetworkFailures++;
+                            if (consecutiveNetworkFailures >= 3 && !isAutoScanningSubnet) {
+                                triggerSilentSubnetAutoDiscovery();
+                            }
                             if (isActivityDestroyed) return;
                             runOnUiThread(() -> {
                                 showNetworkWarning(true);
@@ -736,8 +747,9 @@ public class MainActivity extends AppCompatActivity {
                                 final double glucoseMmol = sgv / 18.0;
                                 final String finalDirection = direction;
                                 
-                                // Reset polling interval on successful data fetch
+                                // Reset polling interval and failure count on successful data fetch
                                 networkPollInterval = BASE_POLL_INTERVAL;
+                                consecutiveNetworkFailures = 0;
                                 
                                 if (isActivityDestroyed) return;
                                 runOnUiThread(() -> {
@@ -1387,5 +1399,75 @@ public class MainActivity extends AppCompatActivity {
         outState.putBoolean("hasConnectionError", hasConnectionError);
         outState.putBoolean("isShowingTime", isShowingTime);
         outState.putLong("alarmSnoozeUntilTime", alarmSnoozeUntilTime);
+    }
+
+    private void triggerSilentSubnetAutoDiscovery() {
+        if (isAutoScanningSubnet || isActivityDestroyed) return;
+        if (!"network".equals(dataSource)) return;
+
+        final String currentIp = serverIp != null ? serverIp.trim() : "";
+        final String secret = cachedSecretHash;
+        if (secret == null || secret.isEmpty()) return;
+
+        isAutoScanningSubnet = true;
+        Log.i(TAG, "Consecutive network failures >= 3. Triggering silent background subnet discovery...");
+
+        new Thread(() -> {
+            try {
+                String basePrefix = "";
+                if (currentIp.contains(".")) {
+                    int lastDot = currentIp.lastIndexOf('.');
+                    basePrefix = currentIp.substring(0, lastDot + 1);
+                }
+                if (basePrefix.isEmpty()) {
+                    basePrefix = "192.168.1.";
+                }
+                final String subnetPrefix = basePrefix;
+
+                final OkHttpClient scanClient = HttpClientProvider.getClient().newBuilder()
+                        .connectTimeout(1200, java.util.concurrent.TimeUnit.MILLISECONDS)
+                        .readTimeout(1200, java.util.concurrent.TimeUnit.MILLISECONDS)
+                        .build();
+
+                java.util.concurrent.ExecutorService scanExecutor = java.util.concurrent.Executors.newFixedThreadPool(28);
+                final java.util.concurrent.atomic.AtomicBoolean found = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+                for (int i = 1; i <= 254; i++) {
+                    if (found.get()) break;
+                    final String targetIp = subnetPrefix + i;
+                    scanExecutor.execute(() -> {
+                        if (found.get()) return;
+                        try {
+                            String checkUrl = "http://" + targetIp + ":17580/sgv.json";
+                            Request req = new Request.Builder().url(checkUrl).addHeader("api-secret", secret).build();
+                            try (Response resp = scanClient.newCall(req).execute()) {
+                                if (resp.isSuccessful() || resp.code() == 401) {
+                                    if (found.compareAndSet(false, true)) {
+                                        Log.i(TAG, "Silent auto-discovery found Master server at: " + targetIp);
+                                        serverIp = targetIp;
+                                        consecutiveNetworkFailures = 0;
+                                        SharedPreferences prefs = getSharedPreferences("DiaClockPrefs", MODE_PRIVATE);
+                                        prefs.edit().putString("ip_address", targetIp).apply();
+
+                                        if (!isActivityDestroyed) {
+                                            runOnUiThread(() -> {
+                                                Toast.makeText(MainActivity.this, getString(R.string.msg_auto_discovered_master, targetIp), Toast.LENGTH_SHORT).show();
+                                                fetchGlucoseData();
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (Exception ignored) {}
+                    });
+                }
+                scanExecutor.shutdown();
+                scanExecutor.awaitTermination(3500, java.util.concurrent.TimeUnit.MILLISECONDS);
+            } catch (Exception e) {
+                Log.e(TAG, "Silent auto-discovery error: " + e.getMessage());
+            } finally {
+                isAutoScanningSubnet = false;
+            }
+        }).start();
     }
 }

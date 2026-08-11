@@ -56,6 +56,7 @@
     <string name="msg_invalid_thresholds">Верхний порог сахара должен быть больше нижнего</string>
     <string name="msg_invalid_time_format">Введите время в формате ЧЧ:мм (например, 08:00)</string>
     <string name="msg_saved">Настройки успешно сохранены</string>
+    <string name="msg_auto_discovered_master">Найден новый IP Мастера: %s</string>
     
     <!-- Alarm Hints -->
     <string name="hint_bell_active">Звуковой сигнал включен 🔔</string>

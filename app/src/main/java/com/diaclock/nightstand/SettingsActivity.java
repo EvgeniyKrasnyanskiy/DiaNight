@@ -156,6 +156,17 @@ public class SettingsActivity extends AppCompatActivity {
         btnColorYellow = findViewById(R.id.btnColorYellow);
         btnColorTeal = findViewById(R.id.btnColorTeal);
 
+        setupColorButtonTint(btnColorWhite, Color.WHITE);
+        setupColorButtonTint(btnColorGrey, Color.parseColor("#8E8E93"));
+        setupColorButtonTint(btnColorDarkGrey, Color.parseColor("#3A3A3C"));
+        setupColorButtonTint(btnColorGreen, Color.parseColor("#34C759"));
+        setupColorButtonTint(btnColorBlue, Color.parseColor("#007AFF"));
+        setupColorButtonTint(btnColorOrange, Color.parseColor("#FF9500"));
+        setupColorButtonTint(btnColorRed, Color.parseColor("#FF3B30"));
+        setupColorButtonTint(btnColorPurple, Color.parseColor("#AF52DE"));
+        setupColorButtonTint(btnColorYellow, Color.parseColor("#FFCC00"));
+        setupColorButtonTint(btnColorTeal, Color.parseColor("#30B0C7"));
+
         tvRingtoneName = findViewById(R.id.tvRingtoneName);
         btnChooseRingtone = findViewById(R.id.btnChooseRingtone);
         btnTestRingtone = findViewById(R.id.btnTestRingtone);
@@ -359,6 +370,12 @@ public class SettingsActivity extends AppCompatActivity {
     private void updateColor(int color) {
         selectedColor = color;
         viewColorPreview.setBackgroundColor(selectedColor);
+    }
+
+    private void setupColorButtonTint(Button btn, int color) {
+        if (btn != null) {
+            androidx.core.view.ViewCompat.setBackgroundTintList(btn, android.content.res.ColorStateList.valueOf(color));
+        }
     }
 
     private void openColorPickerDialog() {
