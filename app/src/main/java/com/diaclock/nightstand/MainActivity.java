@@ -791,7 +791,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                     if (isActivityDestroyed) return;
                     runOnUiThread(() -> {
-                        boolean showWarning = consecutiveNetworkFailures >= 2;
+                        boolean showWarning = consecutiveNetworkFailures >= 10;
                         showNetworkWarning(showWarning);
                         if (showWarning) {
                             tvGlucose.setText("---");
@@ -813,7 +813,7 @@ public class MainActivity extends AppCompatActivity {
                             }
                             if (isActivityDestroyed) return;
                             runOnUiThread(() -> {
-                                boolean showWarning = consecutiveNetworkFailures >= 2;
+                                boolean showWarning = consecutiveNetworkFailures >= 10;
                                 showNetworkWarning(showWarning);
                                 if (showWarning) {
                                     tvGlucose.setText("---");
@@ -874,7 +874,7 @@ public class MainActivity extends AppCompatActivity {
                                 consecutiveNetworkFailures++;
                                 if (isActivityDestroyed) return;
                                 runOnUiThread(() -> {
-                                    boolean showWarning = consecutiveNetworkFailures >= 2;
+                                    boolean showWarning = consecutiveNetworkFailures >= 10;
                                     showNetworkWarning(showWarning);
                                     if (showWarning) {
                                         tvGlucose.setText("---");
@@ -889,7 +889,7 @@ public class MainActivity extends AppCompatActivity {
                             consecutiveNetworkFailures++;
                             if (isActivityDestroyed) return;
                             runOnUiThread(() -> {
-                                boolean showWarning = consecutiveNetworkFailures >= 2;
+                                boolean showWarning = consecutiveNetworkFailures >= 10;
                                 showNetworkWarning(showWarning);
                                 if (showWarning) {
                                     tvGlucose.setText("---");
