@@ -23,9 +23,27 @@ if (versionPropsFile.exists()) {
     }
 }
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localProperties.load(new FileInputStream(localPropertiesFile))
+}
+
 android {
     namespace 'com.diaclock.nightstand'
     compileSdk 33
+
+    signingConfigs {
+        release {
+            def storeFileObj = rootProject.file('dianight.jks')
+            if (storeFileObj.exists() && localProperties.containsKey('RELEASE_STORE_PASSWORD')) {
+                storeFile storeFileObj
+                storePassword localProperties['RELEASE_STORE_PASSWORD']
+                keyAlias localProperties['RELEASE_KEY_ALIAS']
+                keyPassword localProperties['RELEASE_KEY_PASSWORD']
+            }
+        }
+    }
 
     defaultConfig {
         applicationId "com.diaclock.nightstand"
@@ -41,7 +59,11 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.debug
+            if (rootProject.file('dianight.jks').exists() && localProperties.containsKey('RELEASE_STORE_PASSWORD')) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+            }
         }
     }
     compileOptions {
