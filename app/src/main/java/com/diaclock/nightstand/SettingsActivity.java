@@ -8,6 +8,7 @@ import android.media.Ringtone;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -1077,6 +1078,7 @@ public class SettingsActivity extends AppCompatActivity {
         HttpClientProvider.getClient().newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e("SettingsActivity", "Update check failed: " + e.getMessage(), e);
                 runOnUiThread(() -> {
                     if (isFinishing() || isDestroyed()) return;
                     tvUpdateStatus.setText(getString(R.string.msg_update_check_failed));
