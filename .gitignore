@@ -19,3 +19,7 @@ local.properties
 Thumbs.db
 .gemini/docs/
 
+# Keystores
+*.jks
+*.keystore
+

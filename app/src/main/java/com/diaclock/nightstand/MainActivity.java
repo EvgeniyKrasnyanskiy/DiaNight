@@ -138,6 +138,87 @@ public class MainActivity extends AppCompatActivity {
     private static final long BASE_POLL_INTERVAL = 15000L;
     private static final long MAX_POLL_INTERVAL = 120000L; // 2 minutes max backoff
     
+    // New features state
+    private boolean alarmUseFlash = false;
+    private boolean enableAutoClose = false;
+    private String autoCloseTime = "07:00";
+    private String lastAutoCloseTriggeredTime = "";
+
+    // Camera Flash Alarm state and handlers
+    private final Handler flashHandler = new Handler(Looper.getMainLooper());
+    private boolean isFlashPulsing = false;
+    private boolean isFlashOn = false;
+    private android.hardware.Camera cameraLegacy = null;
+
+    private final Runnable flashBlinkRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!isAlarmSounding || !alarmUseFlash) {
+                stopFlashBlinking();
+                return;
+            }
+            isFlashOn = !isFlashOn;
+            setHardwareTorchMode(isFlashOn);
+            flashHandler.postDelayed(this, 500);
+        }
+    };
+
+    private void setHardwareTorchMode(boolean on) {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 23) {
+                android.hardware.camera2.CameraManager cameraManager = (android.hardware.camera2.CameraManager) getSystemService(Context.CAMERA_SERVICE);
+                if (cameraManager != null) {
+                    String[] ids = cameraManager.getCameraIdList();
+                    if (ids != null && ids.length > 0) {
+                        cameraManager.setTorchMode(ids[0], on);
+                    }
+                }
+            } else {
+                if (on) {
+                    if (cameraLegacy == null) {
+                        cameraLegacy = android.hardware.Camera.open();
+                    }
+                    if (cameraLegacy != null) {
+                        android.hardware.Camera.Parameters p = cameraLegacy.getParameters();
+                        p.setFlashMode(android.hardware.Camera.Parameters.FLASH_MODE_TORCH);
+                        cameraLegacy.setParameters(p);
+                        cameraLegacy.startPreview();
+                    }
+                } else {
+                    if (cameraLegacy != null) {
+                        try {
+                            android.hardware.Camera.Parameters p = cameraLegacy.getParameters();
+                            p.setFlashMode(android.hardware.Camera.Parameters.FLASH_MODE_OFF);
+                            cameraLegacy.setParameters(p);
+                            cameraLegacy.stopPreview();
+                        } catch (Exception e) {
+                            // ignore
+                        } finally {
+                            cameraLegacy.release();
+                            cameraLegacy = null;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Hardware torch control failed: " + e.getMessage());
+        }
+    }
+
+    private void startFlashBlinking() {
+        if (isFlashPulsing) return;
+        isFlashPulsing = true;
+        flashHandler.removeCallbacks(flashBlinkRunnable);
+        flashHandler.post(flashBlinkRunnable);
+    }
+
+    private void stopFlashBlinking() {
+        isFlashPulsing = false;
+        isFlashOn = false;
+        flashHandler.removeCallbacks(flashBlinkRunnable);
+        setHardwareTorchMode(false);
+    }
+
     // Runnable fields for explicit lifecycle control
     private final Runnable timeRunnable = new Runnable() {
         @Override
@@ -156,6 +237,21 @@ public class MainActivity extends AppCompatActivity {
                 lastDisplayedMinutes = minutesStr;
             }
             
+            // Check scheduled auto-close trigger
+            String currentTime = hoursStr + ":" + minutesStr;
+            if (enableAutoClose && currentTime.equals(autoCloseTime) && !currentTime.equals(lastAutoCloseTriggeredTime)) {
+                lastAutoCloseTriggeredTime = currentTime;
+                Log.i(TAG, "Scheduled auto-close time (" + currentTime + ") reached. Finishing activity.");
+                Toast.makeText(MainActivity.this, getString(R.string.msg_autoclose_triggered), Toast.LENGTH_SHORT).show();
+                mainHandler.postDelayed(() -> {
+                    if (android.os.Build.VERSION.SDK_INT >= 21) {
+                        finishAndRemoveTask();
+                    } else {
+                        finish();
+                    }
+                }, 1000);
+            }
+
             mainHandler.postDelayed(this, 1000); // Poll clock checks every second
         }
     };
@@ -461,6 +557,9 @@ public class MainActivity extends AppCompatActivity {
         textColor = prefs.getInt("text_color", Color.WHITE);
         dataSource = prefs.getString("data_source", "network");
         nightlightMode = prefs.getBoolean("nightlight_mode", false);
+        alarmUseFlash = prefs.getBoolean("alarm_use_flash", false);
+        enableAutoClose = prefs.getBoolean("enable_autoclose", false);
+        autoCloseTime = prefs.getString("autoclose_time", "07:00");
         
         // Cache SHA-1 hash of API secret to avoid recomputing on every request
         cachedSecretHash = (apiSecret != null && !apiSecret.trim().isEmpty())
@@ -946,11 +1045,11 @@ public class MainActivity extends AppCompatActivity {
         String dayStartStr = prefs.getString("day_start", "08:00");
         String dayEndStr = prefs.getString("day_end", "22:00");
         
-        float dayHigh = prefs.getFloat("day_high", 10.0f);
-        float dayLow = prefs.getFloat("day_low", 4.0f);
+        float dayHigh = prefs.getFloat("day_high", 8.5f);
+        float dayLow = prefs.getFloat("day_low", 4.5f);
         
-        float nightHigh = prefs.getFloat("night_high", 11.0f);
-        float nightLow = prefs.getFloat("night_low", 3.6f);
+        float nightHigh = prefs.getFloat("night_high", 10.0f);
+        float nightLow = prefs.getFloat("night_low", 3.8f);
 
         boolean isDaytime = determineIsDaytime(dayStartStr, dayEndStr);
         
@@ -1036,6 +1135,10 @@ public class MainActivity extends AppCompatActivity {
                 isAlarmSounding = true;
                 mediaPlayer.start();
 
+                if (alarmUseFlash) {
+                    startFlashBlinking();
+                }
+
                 // Start gentle flashing animation pulsing the background between black and dark red
                 if (alarmVisualAnimator == null) {
                     alarmVisualAnimator = ValueAnimator.ofObject(new android.animation.ArgbEvaluator(), Color.BLACK, Color.parseColor("#330000"));
@@ -1071,6 +1174,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void stopAlarmSound() {
         isAlarmSounding = false;
+        stopFlashBlinking();
         mainHandler.removeCallbacks(autoSnoozeRunnable);
         if (alarmVisualAnimator != null) {
             alarmVisualAnimator.cancel();

@@ -31,6 +31,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.RadioGroup;
 import android.widget.RadioButton;
 import android.widget.Spinner;
@@ -98,6 +99,10 @@ public class SettingsActivity extends AppCompatActivity {
     
     private CheckBox chkNightlightMode;
     private Spinner spAppLanguage;
+    
+    private CheckBox chkUseFlashOnAlarm;
+    private CheckBox chkEnableAutoClose;
+    private EditText etAutoCloseTime;
     
     private String downloadUrl = null;
 
@@ -190,6 +195,10 @@ public class SettingsActivity extends AppCompatActivity {
 
         chkNightlightMode = findViewById(R.id.chkNightlightMode);
         spAppLanguage = findViewById(R.id.spAppLanguage);
+
+        chkUseFlashOnAlarm = findViewById(R.id.chkUseFlashOnAlarm);
+        chkEnableAutoClose = findViewById(R.id.chkEnableAutoClose);
+        etAutoCloseTime = findViewById(R.id.etAutoCloseTime);
     }
 
     private void loadSavedSettings() {
@@ -202,12 +211,22 @@ public class SettingsActivity extends AppCompatActivity {
         etDayStart.setText(prefs.getString("day_start", "08:00"));
         etDayEnd.setText(prefs.getString("day_end", "22:00"));
         
-        etDayLow.setText(String.format(Locale.US, "%.1f", prefs.getFloat("day_low", 4.0f)));
-        etDayHigh.setText(String.format(Locale.US, "%.1f", prefs.getFloat("day_high", 10.0f)));
+        etDayLow.setText(String.format(Locale.US, "%.1f", prefs.getFloat("day_low", 4.5f)));
+        etDayHigh.setText(String.format(Locale.US, "%.1f", prefs.getFloat("day_high", 8.5f)));
         
-        etNightLow.setText(String.format(Locale.US, "%.1f", prefs.getFloat("night_low", 3.6f)));
-        etNightHigh.setText(String.format(Locale.US, "%.1f", prefs.getFloat("night_high", 11.0f)));
+        etNightLow.setText(String.format(Locale.US, "%.1f", prefs.getFloat("night_low", 3.8f)));
+        etNightHigh.setText(String.format(Locale.US, "%.1f", prefs.getFloat("night_high", 10.0f)));
         etSnoozeInterval.setText(String.valueOf(prefs.getInt("snooze_interval", 60)));
+
+        if (chkUseFlashOnAlarm != null) {
+            chkUseFlashOnAlarm.setChecked(prefs.getBoolean("alarm_use_flash", false));
+        }
+        if (chkEnableAutoClose != null) {
+            chkEnableAutoClose.setChecked(prefs.getBoolean("enable_autoclose", false));
+        }
+        if (etAutoCloseTime != null) {
+            etAutoCloseTime.setText(prefs.getString("autoclose_time", "07:00"));
+        }
 
         selectedColor = prefs.getInt("text_color", Color.WHITE);
         viewColorPreview.setBackgroundColor(selectedColor);
@@ -602,6 +621,15 @@ public class SettingsActivity extends AppCompatActivity {
             return;
         }
 
+        String autoCloseTime = etAutoCloseTime != null && etAutoCloseTime.getText() != null ? etAutoCloseTime.getText().toString().trim() : "";
+        boolean enableAutoClose = chkEnableAutoClose != null && chkEnableAutoClose.isChecked();
+        if (enableAutoClose && !validateTimeFormat(autoCloseTime)) {
+            showToast(getString(R.string.err_invalid_autoclose_time));
+            return;
+        }
+
+        boolean useFlashAlarm = chkUseFlashOnAlarm != null && chkUseFlashOnAlarm.isChecked();
+
         String apiSecret = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
         
         String dataSource = rbSourceNetwork.isChecked() ? "network" : "broadcast";
@@ -613,6 +641,9 @@ public class SettingsActivity extends AppCompatActivity {
         editor.putString("data_source", dataSource);
         editor.putBoolean("auto_check_updates", autoCheck);
         editor.putBoolean("nightlight_mode", nightlightMode);
+        editor.putBoolean("alarm_use_flash", useFlashAlarm);
+        editor.putBoolean("enable_autoclose", enableAutoClose);
+        editor.putString("autoclose_time", autoCloseTime);
         editor.putString("ip_address", ip);
         editor.putString("api_secret", apiSecret);
         editor.putInt("toggle_interval", interval);

@@ -147,4 +147,10 @@
     <string name="btn_download_apk">Download APK</string>
     <string name="btn_download">Download</string>
     <string name="msg_update_not_checked">Updates not checked yet</string>
+    <string name="label_flash_alarm">Flash camera on alarm</string>
+    <string name="label_autoclose_card">Scheduled Auto-Close</string>
+    <string name="chk_enable_autoclose">Auto-close app at specified time</string>
+    <string name="label_autoclose_time">Auto-close time (HH:MM)</string>
+    <string name="msg_autoclose_triggered">Auto-closing app as scheduled</string>
+    <string name="err_invalid_autoclose_time">Invalid auto-close time format (must be HH:MM)</string>
 </resources>

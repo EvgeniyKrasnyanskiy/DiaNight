@@ -147,4 +147,10 @@
     <string name="btn_download_apk">Скачать APK</string>
     <string name="btn_download">Скачать</string>
     <string name="msg_update_not_checked">Обновления не проверялись</string>
+    <string name="label_flash_alarm">Мигать вспышкой при тревоге</string>
+    <string name="label_autoclose_card">Автозакрытие приложения</string>
+    <string name="chk_enable_autoclose">Автоматически закрывать приложение</string>
+    <string name="label_autoclose_time">Время автозакрытия (ЧЧ:ММ)</string>
+    <string name="msg_autoclose_triggered">Автозакрытие приложения по расписанию</string>
+    <string name="err_invalid_autoclose_time">Неверный формат времени автозакрытия (ЧЧ:ММ)</string>
 </resources>
