@@ -48,8 +48,8 @@ public final class HttpClientProvider {
 
     private static OkHttpClient createClient() {
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(10, TimeUnit.SECONDS);
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS);
 
         if (Build.VERSION.SDK_INT >= 19 && Build.VERSION.SDK_INT <= 21) {
             enableTls12AndLegacyTrust(builder);

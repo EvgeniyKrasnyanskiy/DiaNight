@@ -134,8 +134,8 @@ public class MainActivity extends AppCompatActivity {
     private volatile boolean isAutoScanningSubnet = false;
     
     // Adaptive polling interval with exponential backoff on errors
-    private volatile long networkPollInterval = 15000L; // 15 seconds base (CGMs update every 1-5 min)
-    private static final long BASE_POLL_INTERVAL = 15000L;
+    private volatile long networkPollInterval = 30000L; // 30 seconds base (CGMs update every 1-5 min)
+    private static final long BASE_POLL_INTERVAL = 30000L;
     private static final long MAX_POLL_INTERVAL = 120000L; // 2 minutes max backoff
     
     // New features state
@@ -791,11 +791,14 @@ public class MainActivity extends AppCompatActivity {
                     }
                     if (isActivityDestroyed) return;
                     runOnUiThread(() -> {
-                        showNetworkWarning(true);
-                        tvGlucose.setText("---");
-                        tvIoB.setVisibility(View.GONE);
-                        adjustGlucoseAndIoBTextSizes();
-                        applyTextColor();
+                        boolean showWarning = consecutiveNetworkFailures >= 2;
+                        showNetworkWarning(showWarning);
+                        if (showWarning) {
+                            tvGlucose.setText("---");
+                            tvIoB.setVisibility(View.GONE);
+                            adjustGlucoseAndIoBTextSizes();
+                            applyTextColor();
+                        }
                     });
                 }
 
@@ -810,11 +813,14 @@ public class MainActivity extends AppCompatActivity {
                             }
                             if (isActivityDestroyed) return;
                             runOnUiThread(() -> {
-                                showNetworkWarning(true);
-                                tvGlucose.setText("---");
-                                tvIoB.setVisibility(View.GONE);
-                                adjustGlucoseAndIoBTextSizes();
-                                applyTextColor();
+                                boolean showWarning = consecutiveNetworkFailures >= 2;
+                                showNetworkWarning(showWarning);
+                                if (showWarning) {
+                                    tvGlucose.setText("---");
+                                    tvIoB.setVisibility(View.GONE);
+                                    adjustGlucoseAndIoBTextSizes();
+                                    applyTextColor();
+                                }
                             });
                             return;
                         }
@@ -865,24 +871,32 @@ public class MainActivity extends AppCompatActivity {
                                 // Fetch IoB from the separate /pebble endpoint
                                 fetchIoBData();
                             } else {
+                                consecutiveNetworkFailures++;
                                 if (isActivityDestroyed) return;
                                 runOnUiThread(() -> {
-                                    showNetworkWarning(true);
-                                    tvGlucose.setText("---");
-                                    tvIoB.setVisibility(View.GONE);
-                                    adjustGlucoseAndIoBTextSizes();
-                                    applyTextColor();
+                                    boolean showWarning = consecutiveNetworkFailures >= 2;
+                                    showNetworkWarning(showWarning);
+                                    if (showWarning) {
+                                        tvGlucose.setText("---");
+                                        tvIoB.setVisibility(View.GONE);
+                                        adjustGlucoseAndIoBTextSizes();
+                                        applyTextColor();
+                                    }
                                 });
                             }
                         } catch (Exception e) {
                             Log.e(TAG, "Parsing SGV JSON failed: " + e.getMessage());
+                            consecutiveNetworkFailures++;
                             if (isActivityDestroyed) return;
                             runOnUiThread(() -> {
-                                showNetworkWarning(true);
-                                tvGlucose.setText("---");
-                                tvIoB.setVisibility(View.GONE);
-                                adjustGlucoseAndIoBTextSizes();
-                                applyTextColor();
+                                boolean showWarning = consecutiveNetworkFailures >= 2;
+                                showNetworkWarning(showWarning);
+                                if (showWarning) {
+                                    tvGlucose.setText("---");
+                                    tvIoB.setVisibility(View.GONE);
+                                    adjustGlucoseAndIoBTextSizes();
+                                    applyTextColor();
+                                }
                             });
                         }
                     } finally {
