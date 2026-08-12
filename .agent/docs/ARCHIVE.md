@@ -13,10 +13,15 @@
 - **Поддержка TLS 1.2 и сертификатов для GitHub API на Android 4.4:** В `HttpClientProvider.java` реализован `TLSSocketFactory` и `X509TrustManager`, устранивший ошибки `CertPathValidatorException` (Trust Anchor Not Found) при проверке обновлений.
 - **Официальная подпись релизов (`dianight.jks`):** Настроена интеграция ключа `dianight.jks` в `app/build.gradle` с безопасным чтением паролей из `local.properties`.
 
+- **Оптимизация опроса сети и защита от ложных предупреждений (v1.1.70):**
+  - Увеличен базовый интервал опроса мастер-источника с 15 до 30 секунд.
+  - Увеличены таймауты сетевых соединений `connectTimeout` и `readTimeout` в `HttpClientProvider` с 10 до 15 секунд.
+  - Изменена логика `showNetworkWarning`: предупреждение (желтый треугольник) теперь отображается только при 2 и более сбоях подряд (`consecutiveNetworkFailures >= 2`), предотвращая ложные мигания значка при разовых сетевых задержках.
+
 ### 2. Сборка и Релизы:
-- Скомпилирован и проверен релизний APK `DiaNight-v1.1.66-release.apk`.
-- Успешно установлен и проверен через ADB на смартфоне Alcatel 6037Y.
-- Опубликован официальный релиз на GitHub: `v1.1.66` (`https://github.com/EvgeniyKrasnyanskiy/DiaNight/releases/tag/v1.1.66`).
+- Скомпилирован и проверен релизный APK `DiaNight-v1.1.70-release.apk`.
+- Успешно установлен и проверен через ADB на подключенном смартфоне.
+- Опубликован официальный релиз на GitHub: `v1.1.70` (`https://github.com/EvgeniyKrasnyanskiy/DiaNight/releases/tag/v1.1.70`).
 
 ### 3. Коммиты сессии:
 1. `b0a7ed9` — `feat: adapt build.gradle for Android 4.4 KitKat (minSdk 19) and OkHttp 3.12.13`
@@ -25,3 +30,4 @@
 4. `744292d` — `fix: enable TLS 1.2 compatibility for GitHub update checks on Android 4.4 KitKat`
 5. `0cb28c2` — `fix: resolve Trust anchor CA certificate exception for GitHub API on Android 4.4 KitKat`
 6. `e94da65` — `feat: configure release signing with official dianight.jks keystore`
+7. `43415a9` — `fix: adjust poll interval to 30s, timeout to 15s, and trigger warning on 2+ consecutive failures`
