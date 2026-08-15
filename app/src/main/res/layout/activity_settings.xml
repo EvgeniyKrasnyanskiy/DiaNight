@@ -170,6 +170,17 @@
                         android:singleLine="true"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
+                <!-- Static IP / Disable Auto-Scan Checkbox -->
+                <CheckBox
+                    android:id="@+id/chkDisableAutoScan"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="@string/chk_disable_auto_scan"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/colorPrimary"
+                    android:textSize="14sp"/>
+
                 <!-- Actions row for Test & AutoSearch -->
                 <LinearLayout
                     android:layout_width="match_parent"

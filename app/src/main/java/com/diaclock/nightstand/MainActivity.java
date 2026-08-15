@@ -143,6 +143,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean enableAutoClose = false;
     private String autoCloseTime = "07:00";
     private String lastAutoCloseTriggeredTime = "";
+    private boolean disableAutoScan = false;
 
     // Camera Flash Alarm state and handlers
     private final Handler flashHandler = new Handler(Looper.getMainLooper());
@@ -224,8 +225,10 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void run() {
             Calendar c = Calendar.getInstance();
-            String hoursStr = String.format(Locale.US, "%02d", c.get(Calendar.HOUR_OF_DAY));
-            String minutesStr = String.format(Locale.US, "%02d", c.get(Calendar.MINUTE));
+            int currentH = c.get(Calendar.HOUR_OF_DAY);
+            int currentM = c.get(Calendar.MINUTE);
+            String hoursStr = String.format(Locale.US, "%02d", currentH);
+            String minutesStr = String.format(Locale.US, "%02d", currentM);
 
             // Only update UI if text actually changed to reduce unnecessary rendering
             if (!hoursStr.equals(lastDisplayedHours)) {
@@ -239,7 +242,7 @@ public class MainActivity extends AppCompatActivity {
             
             // Check scheduled auto-close trigger
             String currentTime = hoursStr + ":" + minutesStr;
-            if (enableAutoClose && currentTime.equals(autoCloseTime) && !currentTime.equals(lastAutoCloseTriggeredTime)) {
+            if (enableAutoClose && isAutoCloseTimeMatch(currentH, currentM, autoCloseTime) && !currentTime.equals(lastAutoCloseTriggeredTime)) {
                 lastAutoCloseTriggeredTime = currentTime;
                 Log.i(TAG, "Scheduled auto-close time (" + currentTime + ") reached. Finishing activity.");
                 Toast.makeText(MainActivity.this, getString(R.string.msg_autoclose_triggered), Toast.LENGTH_SHORT).show();
@@ -462,6 +465,7 @@ public class MainActivity extends AppCompatActivity {
         mainHandler.removeCallbacks(toggleRunnable);
         pixelShiftHandler.removeCallbacks(pixelShiftRunnable);
         inactivityHandler.removeCallbacks(inactivityRunnable);
+        stopFlashBlinking();
         unregisterBatteryReceiver();
         unregisterXdripReceiver();
     }
@@ -560,6 +564,7 @@ public class MainActivity extends AppCompatActivity {
         alarmUseFlash = prefs.getBoolean("alarm_use_flash", false);
         enableAutoClose = prefs.getBoolean("enable_autoclose", false);
         autoCloseTime = prefs.getString("autoclose_time", "07:00");
+        disableAutoScan = prefs.getBoolean("disable_auto_scan", false);
         
         // Cache SHA-1 hash of API secret to avoid recomputing on every request
         cachedSecretHash = (apiSecret != null && !apiSecret.trim().isEmpty())
@@ -1144,44 +1149,60 @@ public class MainActivity extends AppCompatActivity {
                 mediaPlayer = new MediaPlayer();
                 mediaPlayer.setDataSource(this, alarmUri);
                 mediaPlayer.setLooping(true);
-                mediaPlayer.prepare();
-                
-                isAlarmSounding = true;
-                mediaPlayer.start();
-
-                if (alarmUseFlash) {
-                    startFlashBlinking();
+                if (android.os.Build.VERSION.SDK_INT >= 21) {
+                    mediaPlayer.setAudioAttributes(new android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build());
+                } else {
+                    mediaPlayer.setAudioStreamType(android.media.AudioManager.STREAM_ALARM);
                 }
+                mediaPlayer.setOnPreparedListener(mp -> {
+                    if (isActivityDestroyed || !alarmEnabled) {
+                        stopAlarmSound();
+                        return;
+                    }
+                    try {
+                        isAlarmSounding = true;
+                        mp.start();
 
-                // Start gentle flashing animation pulsing the background between black and dark red
-                if (alarmVisualAnimator == null) {
-                    alarmVisualAnimator = ValueAnimator.ofObject(new android.animation.ArgbEvaluator(), Color.BLACK, Color.parseColor("#330000"));
-                    alarmVisualAnimator.setDuration(1500);
-                    alarmVisualAnimator.setRepeatCount(ValueAnimator.INFINITE);
-                    alarmVisualAnimator.setRepeatMode(ValueAnimator.REVERSE);
-                    alarmVisualAnimator.addUpdateListener(animation -> {
-                        if (mainRootLayout != null && !isActivityDestroyed) {
-                            mainRootLayout.setBackgroundColor((int) animation.getAnimatedValue());
+                        if (alarmUseFlash) {
+                            startFlashBlinking();
                         }
-                    });
-                    alarmVisualAnimator.start();
-                }
-                
-                // Schedule auto-snooze
-                mainHandler.removeCallbacks(autoSnoozeRunnable);
-                mainHandler.postDelayed(autoSnoozeRunnable, MAX_ALARM_DURATION_MS);
-                
-                Toast.makeText(this, getString(R.string.msg_alarm_warning), Toast.LENGTH_LONG).show();
+
+                        // Start gentle flashing animation pulsing the background between black and dark red
+                        if (alarmVisualAnimator == null) {
+                            alarmVisualAnimator = ValueAnimator.ofObject(new android.animation.ArgbEvaluator(), Color.BLACK, Color.parseColor("#330000"));
+                            alarmVisualAnimator.setDuration(1500);
+                            alarmVisualAnimator.setRepeatCount(ValueAnimator.INFINITE);
+                            alarmVisualAnimator.setRepeatMode(ValueAnimator.REVERSE);
+                            alarmVisualAnimator.addUpdateListener(animation -> {
+                                if (mainRootLayout != null && !isActivityDestroyed) {
+                                    mainRootLayout.setBackgroundColor((int) animation.getAnimatedValue());
+                                }
+                            });
+                            alarmVisualAnimator.start();
+                        }
+                        
+                        // Schedule auto-snooze
+                        mainHandler.removeCallbacks(autoSnoozeRunnable);
+                        mainHandler.postDelayed(autoSnoozeRunnable, MAX_ALARM_DURATION_MS);
+                        
+                        Toast.makeText(MainActivity.this, getString(R.string.msg_alarm_warning), Toast.LENGTH_LONG).show();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error starting MediaPlayer on prepared: " + e.getMessage());
+                        stopAlarmSound();
+                    }
+                });
+                mediaPlayer.setOnErrorListener((mp, what, extra) -> {
+                    Log.e(TAG, "MediaPlayer error occurred: what=" + what + ", extra=" + extra);
+                    stopAlarmSound();
+                    return true;
+                });
+                mediaPlayer.prepareAsync();
             } catch (Exception e) {
                 Log.e(TAG, "Playing alarm sound failed: " + e.getMessage());
-                if (mediaPlayer != null) {
-                    try {
-                        mediaPlayer.release();
-                    } catch (Exception ex) {
-                        // ignore
-                    }
-                    mediaPlayer = null;
-                }
+                stopAlarmSound();
             }
         }
     }
@@ -1519,8 +1540,40 @@ public class MainActivity extends AppCompatActivity {
         outState.putLong("alarmSnoozeUntilTime", alarmSnoozeUntilTime);
     }
 
+    private boolean isAutoCloseTimeMatch(int currentH, int currentM, String targetTime) {
+        if (targetTime == null || !targetTime.contains(":")) return false;
+        try {
+            String[] parts = targetTime.split(":");
+            int targetH = Integer.parseInt(parts[0].trim());
+            int targetM = Integer.parseInt(parts[1].trim());
+            return currentH == targetH && currentM == targetM;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private String getLocalSubnetPrefix() {
+        try {
+            for (java.util.Enumeration<java.net.NetworkInterface> en = java.net.NetworkInterface.getNetworkInterfaces(); en.hasMoreElements();) {
+                java.net.NetworkInterface intf = en.nextElement();
+                if (intf.isLoopback() || !intf.isUp()) continue;
+                for (java.util.Enumeration<java.net.InetAddress> enumIpAddr = intf.getInetAddresses(); enumIpAddr.hasMoreElements();) {
+                    java.net.InetAddress inetAddress = enumIpAddr.nextElement();
+                    if (!inetAddress.isLoopbackAddress() && inetAddress instanceof java.net.Inet4Address) {
+                        String ip = inetAddress.getHostAddress();
+                        if (ip != null && !ip.equals("0.0.0.0") && (ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("172."))) {
+                            int lastDot = ip.lastIndexOf('.');
+                            return ip.substring(0, lastDot + 1);
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
     private void triggerSilentSubnetAutoDiscovery() {
-        if (isAutoScanningSubnet || isActivityDestroyed) return;
+        if (disableAutoScan || isAutoScanningSubnet || isActivityDestroyed) return;
         if (!"network".equals(dataSource)) return;
 
         final String currentIp = serverIp != null ? serverIp.trim() : "";
@@ -1531,6 +1584,8 @@ public class MainActivity extends AppCompatActivity {
         Log.i(TAG, "Consecutive network failures >= 3. Triggering silent background subnet discovery...");
 
         new Thread(() -> {
+            java.util.concurrent.ExecutorService scanExecutor = null;
+            OkHttpClient scanClient = null;
             try {
                 String basePrefix = "";
                 if (currentIp.contains(".")) {
@@ -1538,27 +1593,29 @@ public class MainActivity extends AppCompatActivity {
                     basePrefix = currentIp.substring(0, lastDot + 1);
                 }
                 if (basePrefix.isEmpty()) {
-                    basePrefix = "192.168.1.";
+                    String detectedPrefix = getLocalSubnetPrefix();
+                    basePrefix = detectedPrefix != null ? detectedPrefix : "192.168.1.";
                 }
                 final String subnetPrefix = basePrefix;
 
-                final OkHttpClient scanClient = HttpClientProvider.getClient().newBuilder()
+                scanClient = HttpClientProvider.getClient().newBuilder()
                         .connectTimeout(1200, java.util.concurrent.TimeUnit.MILLISECONDS)
                         .readTimeout(1200, java.util.concurrent.TimeUnit.MILLISECONDS)
                         .build();
 
-                java.util.concurrent.ExecutorService scanExecutor = java.util.concurrent.Executors.newFixedThreadPool(28);
+                scanExecutor = java.util.concurrent.Executors.newFixedThreadPool(28);
                 final java.util.concurrent.atomic.AtomicBoolean found = new java.util.concurrent.atomic.AtomicBoolean(false);
+                final OkHttpClient finalScanClient = scanClient;
 
                 for (int i = 1; i <= 254; i++) {
                     if (found.get()) break;
                     final String targetIp = subnetPrefix + i;
                     scanExecutor.execute(() -> {
-                        if (found.get()) return;
+                        if (found.get() || Thread.currentThread().isInterrupted()) return;
                         try {
                             String checkUrl = "http://" + targetIp + ":17580/sgv.json";
                             Request req = new Request.Builder().url(checkUrl).addHeader("api-secret", secret).build();
-                            try (Response resp = scanClient.newCall(req).execute()) {
+                            try (Response resp = finalScanClient.newCall(req).execute()) {
                                 if (resp.isSuccessful() || resp.code() == 401) {
                                     if (found.compareAndSet(false, true)) {
                                         Log.i(TAG, "Silent auto-discovery found Master server at: " + targetIp);
@@ -1584,6 +1641,16 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception e) {
                 Log.e(TAG, "Silent auto-discovery error: " + e.getMessage());
             } finally {
+                if (scanExecutor != null) {
+                    try {
+                        scanExecutor.shutdownNow();
+                    } catch (Exception ignored) {}
+                }
+                if (scanClient != null) {
+                    try {
+                        scanClient.dispatcher().cancelAll();
+                    } catch (Exception ignored) {}
+                }
                 isAutoScanningSubnet = false;
             }
         }).start();

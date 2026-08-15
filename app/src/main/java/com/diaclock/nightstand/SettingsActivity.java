@@ -104,6 +104,7 @@ public class SettingsActivity extends AppCompatActivity {
     private CheckBox chkUseFlashOnAlarm;
     private CheckBox chkEnableAutoClose;
     private EditText etAutoCloseTime;
+    private CheckBox chkDisableAutoScan;
     
     private String downloadUrl = null;
 
@@ -200,6 +201,7 @@ public class SettingsActivity extends AppCompatActivity {
         chkUseFlashOnAlarm = findViewById(R.id.chkUseFlashOnAlarm);
         chkEnableAutoClose = findViewById(R.id.chkEnableAutoClose);
         etAutoCloseTime = findViewById(R.id.etAutoCloseTime);
+        chkDisableAutoScan = findViewById(R.id.chkDisableAutoScan);
     }
 
     private void loadSavedSettings() {
@@ -227,6 +229,9 @@ public class SettingsActivity extends AppCompatActivity {
         }
         if (etAutoCloseTime != null) {
             etAutoCloseTime.setText(prefs.getString("autoclose_time", "07:00"));
+        }
+        if (chkDisableAutoScan != null) {
+            chkDisableAutoScan.setChecked(prefs.getBoolean("disable_auto_scan", false));
         }
 
         selectedColor = prefs.getInt("text_color", Color.WHITE);
@@ -517,12 +522,28 @@ public class SettingsActivity extends AppCompatActivity {
             testMediaPlayer = new MediaPlayer();
             testMediaPlayer.setDataSource(this, ringtoneUri);
             testMediaPlayer.setLooping(false);
-            testMediaPlayer.prepare();
-            testMediaPlayer.start();
-            btnTestRingtone.setText(getString(R.string.btn_test_alarm_stop));
-
-            // Automatically restore button label when playback finishes
+            if (android.os.Build.VERSION.SDK_INT >= 21) {
+                testMediaPlayer.setAudioAttributes(new android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build());
+            } else {
+                testMediaPlayer.setAudioStreamType(android.media.AudioManager.STREAM_ALARM);
+            }
+            testMediaPlayer.setOnPreparedListener(mp -> {
+                try {
+                    mp.start();
+                    btnTestRingtone.setText(getString(R.string.btn_test_alarm_stop));
+                } catch (Exception e) {
+                    stopTestAlarm();
+                }
+            });
+            testMediaPlayer.setOnErrorListener((mp, what, extra) -> {
+                stopTestAlarm();
+                return true;
+            });
             testMediaPlayer.setOnCompletionListener(mp -> stopTestAlarm());
+            testMediaPlayer.prepareAsync();
         } catch (Exception e) {
             Toast.makeText(this, getString(R.string.err_play_ringtone), Toast.LENGTH_SHORT).show();
             stopTestAlarm();
@@ -629,7 +650,19 @@ public class SettingsActivity extends AppCompatActivity {
             return;
         }
 
+        // Normalize auto-close time format to standard HH:mm (with leading zeros)
+        String normalizedAutoCloseTime = autoCloseTime;
+        if (!autoCloseTime.isEmpty() && autoCloseTime.contains(":")) {
+            String[] parts = autoCloseTime.split(":");
+            try {
+                int h = Integer.parseInt(parts[0]);
+                int m = Integer.parseInt(parts[1]);
+                normalizedAutoCloseTime = String.format(Locale.US, "%02d:%02d", h, m);
+            } catch (NumberFormatException ignored) {}
+        }
+
         boolean useFlashAlarm = chkUseFlashOnAlarm != null && chkUseFlashOnAlarm.isChecked();
+        boolean disableAutoScan = chkDisableAutoScan != null && chkDisableAutoScan.isChecked();
 
         String apiSecret = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
         
@@ -644,7 +677,8 @@ public class SettingsActivity extends AppCompatActivity {
         editor.putBoolean("nightlight_mode", nightlightMode);
         editor.putBoolean("alarm_use_flash", useFlashAlarm);
         editor.putBoolean("enable_autoclose", enableAutoClose);
-        editor.putString("autoclose_time", autoCloseTime);
+        editor.putString("autoclose_time", normalizedAutoCloseTime);
+        editor.putBoolean("disable_auto_scan", disableAutoScan);
         editor.putString("ip_address", ip);
         editor.putString("api_secret", apiSecret);
         editor.putInt("toggle_interval", interval);
@@ -776,6 +810,11 @@ public class SettingsActivity extends AppCompatActivity {
         final String subnetPrefix = basePrefix;
         android.util.Log.d("DiaNightScan", "Final scanning subnet prefix: " + subnetPrefix);
 
+        if (progressDialog != null && progressDialog.isShowing()) {
+            try {
+                progressDialog.dismiss();
+            } catch (Exception ignored) {}
+        }
         progressDialog = new ProgressDialog(this);
         progressDialog.setTitle(getString(R.string.dialog_scan_title));
         progressDialog.setMessage(getString(R.string.dialog_scan_msg_format, subnetPrefix));
@@ -1058,6 +1097,7 @@ public class SettingsActivity extends AppCompatActivity {
         cardCoreSetup.setAlpha(isNetwork ? 1.0f : 0.5f);
         etIpAddress.setEnabled(isNetwork);
         etApiSecret.setEnabled(isNetwork);
+        if (chkDisableAutoScan != null) chkDisableAutoScan.setEnabled(isNetwork);
         btnTestConnection.setEnabled(isNetwork);
         btnAutoSearchBeta.setEnabled(isNetwork);
         btnSave.setEnabled(isNetwork);

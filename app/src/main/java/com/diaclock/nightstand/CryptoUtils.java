@@ -37,7 +37,7 @@ public final class CryptoUtils {
             return new String(hexChars);
         } catch (Exception e) {
             Log.e(TAG, "SHA-1 hashing failed: " + e.getMessage());
-            return input;
+            return "";
         }
     }
 }
