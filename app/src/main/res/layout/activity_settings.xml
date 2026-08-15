@@ -181,6 +181,17 @@
                     android:buttonTint="@color/colorPrimary"
                     android:textSize="14sp"/>
 
+                <!-- Wi-Fi Auto-Restart Watchdog Checkbox (for older devices) -->
+                <CheckBox
+                    android:id="@+id/chkWifiWatchdog"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="@string/chk_wifi_watchdog"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/colorPrimary"
+                    android:textSize="14sp"/>
+
                 <!-- Actions row for Test & AutoSearch -->
                 <LinearLayout
                     android:layout_width="match_parent"

@@ -144,6 +144,9 @@ public class MainActivity extends AppCompatActivity {
     private String autoCloseTime = "07:00";
     private String lastAutoCloseTriggeredTime = "";
     private boolean disableAutoScan = false;
+    private boolean wifiWatchdogEnabled = false;
+    private long lastWifiRestartTimestamp = 0;
+    private android.net.wifi.WifiManager.WifiLock wifiLock = null;
     private int glucoseBrightness = 80;
     private String alarmSoundType = SoundGenerator.SOUND_BUILTIN_PULSE;
     private String alarmUriStr = null;
@@ -360,6 +363,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        acquireWifiLock();
 
         // Resume breathing animation
         if (breathingAnimator != null) {
@@ -469,6 +473,7 @@ public class MainActivity extends AppCompatActivity {
         pixelShiftHandler.removeCallbacks(pixelShiftRunnable);
         inactivityHandler.removeCallbacks(inactivityRunnable);
         stopFlashBlinking();
+        releaseWifiLock();
         unregisterBatteryReceiver();
         unregisterXdripReceiver();
     }
@@ -478,6 +483,7 @@ public class MainActivity extends AppCompatActivity {
         isActivityDestroyed = true;
         super.onDestroy();
         stopAlarmSound();
+        releaseWifiLock();
         mainHandler.removeCallbacksAndMessages(null);
 
         if (flashlightBrightnessAnimator != null) {
@@ -568,6 +574,7 @@ public class MainActivity extends AppCompatActivity {
         enableAutoClose = prefs.getBoolean("enable_autoclose", false);
         autoCloseTime = prefs.getString("autoclose_time", "07:00");
         disableAutoScan = prefs.getBoolean("disable_auto_scan", false);
+        wifiWatchdogEnabled = prefs.getBoolean("wifi_watchdog", false);
         glucoseBrightness = prefs.getInt("glucose_brightness", 80);
         
         alarmSoundType = prefs.getString("alarm_sound_type", null);
@@ -822,6 +829,9 @@ public class MainActivity extends AppCompatActivity {
                     if (consecutiveNetworkFailures >= 3 && !isAutoScanningSubnet) {
                         triggerSilentSubnetAutoDiscovery();
                     }
+                    if (consecutiveNetworkFailures >= 10 && wifiWatchdogEnabled) {
+                        triggerWifiWatchdogRestart();
+                    }
                     if (isActivityDestroyed) return;
                     runOnUiThread(() -> {
                         boolean showWarning = consecutiveNetworkFailures >= 10;
@@ -843,6 +853,9 @@ public class MainActivity extends AppCompatActivity {
                             consecutiveNetworkFailures++;
                             if (consecutiveNetworkFailures >= 3 && !isAutoScanningSubnet) {
                                 triggerSilentSubnetAutoDiscovery();
+                            }
+                            if (consecutiveNetworkFailures >= 10 && wifiWatchdogEnabled) {
+                                triggerWifiWatchdogRestart();
                             }
                             if (isActivityDestroyed) return;
                             runOnUiThread(() -> {
@@ -1068,6 +1081,58 @@ public class MainActivity extends AppCompatActivity {
             Log.e(TAG, "Failed to parse IoB element: " + e.getMessage());
         }
         return -1.0;
+    }
+
+    private void acquireWifiLock() {
+        try {
+            if (wifiLock == null) {
+                android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                if (wm != null) {
+                    wifiLock = wm.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "DiaNight:WifiLock");
+                    wifiLock.setReferenceCounted(false);
+                }
+            }
+            if (wifiLock != null && !wifiLock.isHeld()) {
+                wifiLock.acquire();
+                Log.d(TAG, "WifiLock acquired (WIFI_MODE_FULL_HIGH_PERF)");
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to acquire WifiLock: " + e.getMessage());
+        }
+    }
+
+    private void releaseWifiLock() {
+        try {
+            if (wifiLock != null && wifiLock.isHeld()) {
+                wifiLock.release();
+                Log.d(TAG, "WifiLock released");
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to release WifiLock: " + e.getMessage());
+        }
+    }
+
+    private void triggerWifiWatchdogRestart() {
+        if (!wifiWatchdogEnabled) return;
+        long now = System.currentTimeMillis();
+        if (now - lastWifiRestartTimestamp < 120_000L) {
+            return; // Rate limit: don't restart more than once every 2 mins
+        }
+        lastWifiRestartTimestamp = now;
+        Log.w(TAG, "WiFi Watchdog triggered: reconnecting / restarting WiFi module.");
+        new Thread(() -> {
+            try {
+                android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                if (wm != null) {
+                    wm.reconnect();
+                    wm.setWifiEnabled(false);
+                    Thread.sleep(1500);
+                    wm.setWifiEnabled(true);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "WiFi Watchdog exception: " + e.getMessage());
+            }
+        }, "WifiWatchdogThread").start();
     }
 
     private void showNetworkWarning(boolean error) {

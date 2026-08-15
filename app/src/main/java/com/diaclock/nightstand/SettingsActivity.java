@@ -105,6 +105,7 @@ public class SettingsActivity extends AppCompatActivity {
     private CheckBox chkEnableAutoClose;
     private EditText etAutoCloseTime;
     private CheckBox chkDisableAutoScan;
+    private CheckBox chkWifiWatchdog;
 
     // Glucose Color Brightness Dimmer UI
     private SeekBar sbGlucoseBrightness;
@@ -212,6 +213,7 @@ public class SettingsActivity extends AppCompatActivity {
         chkEnableAutoClose = findViewById(R.id.chkEnableAutoClose);
         etAutoCloseTime = findViewById(R.id.etAutoCloseTime);
         chkDisableAutoScan = findViewById(R.id.chkDisableAutoScan);
+        chkWifiWatchdog = findViewById(R.id.chkWifiWatchdog);
 
         sbGlucoseBrightness = findViewById(R.id.sbGlucoseBrightness);
         tvGlucoseBrightnessValue = findViewById(R.id.tvGlucoseBrightnessValue);
@@ -249,6 +251,9 @@ public class SettingsActivity extends AppCompatActivity {
         }
         if (chkDisableAutoScan != null) {
             chkDisableAutoScan.setChecked(prefs.getBoolean("disable_auto_scan", false));
+        }
+        if (chkWifiWatchdog != null) {
+            chkWifiWatchdog.setChecked(prefs.getBoolean("wifi_watchdog", false));
         }
 
         selectedColor = prefs.getInt("text_color", Color.WHITE);
@@ -803,6 +808,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         boolean useFlashAlarm = chkUseFlashOnAlarm != null && chkUseFlashOnAlarm.isChecked();
         boolean disableAutoScan = chkDisableAutoScan != null && chkDisableAutoScan.isChecked();
+        boolean wifiWatchdog = chkWifiWatchdog != null && chkWifiWatchdog.isChecked();
 
         String apiSecret = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
         
@@ -819,6 +825,7 @@ public class SettingsActivity extends AppCompatActivity {
         editor.putBoolean("enable_autoclose", enableAutoClose);
         editor.putString("autoclose_time", normalizedAutoCloseTime);
         editor.putBoolean("disable_auto_scan", disableAutoScan);
+        editor.putBoolean("wifi_watchdog", wifiWatchdog);
         editor.putString("ip_address", ip);
         editor.putString("api_secret", apiSecret);
         editor.putInt("toggle_interval", interval);
@@ -1240,6 +1247,7 @@ public class SettingsActivity extends AppCompatActivity {
         etIpAddress.setEnabled(isNetwork);
         etApiSecret.setEnabled(isNetwork);
         if (chkDisableAutoScan != null) chkDisableAutoScan.setEnabled(isNetwork);
+        if (chkWifiWatchdog != null) chkWifiWatchdog.setEnabled(isNetwork);
         btnTestConnection.setEnabled(isNetwork);
         btnAutoSearchBeta.setEnabled(isNetwork);
         btnSave.setEnabled(isNetwork);
