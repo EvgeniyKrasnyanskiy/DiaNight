@@ -154,4 +154,13 @@
     <string name="msg_autoclose_triggered">Автозакрытие приложения по расписанию</string>
     <string name="err_invalid_autoclose_time">Неверный формат времени автозакрытия (ЧЧ:ММ)</string>
     <string name="chk_disable_auto_scan">Статический IP (не сканировать сеть)</string>
+    
+    <!-- Sound Generator & Brightness Strings -->
+    <string name="sound_pulse_beep">Импульсный бипер 🔔 (Встроенный)</string>
+    <string name="sound_radar_siren">Радар / Сирена 🚨 (Встроенный)</string>
+    <string name="sound_soft_chime">Мягкий перезвон 🎵 (Встроенный)</string>
+    <string name="sound_system_ringtone">Системная мелодия 📱</string>
+    <string name="sound_silent_option">Без звука 🔕</string>
+    <string name="label_glucose_brightness">Яркость цвета сахара и IoB</string>
+    <string name="hint_glucose_brightness">Настройте яркость для комфортного сна в темноте</string>
 </resources>

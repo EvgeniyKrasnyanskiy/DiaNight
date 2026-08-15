@@ -154,4 +154,13 @@
     <string name="msg_autoclose_triggered">Auto-closing app as scheduled</string>
     <string name="err_invalid_autoclose_time">Invalid auto-close time format (must be HH:MM)</string>
     <string name="chk_disable_auto_scan">Static IP (disable auto-scan)</string>
+    
+    <!-- Sound Generator & Brightness Strings -->
+    <string name="sound_pulse_beep">Pulse Beep 🔔 (Built-in)</string>
+    <string name="sound_radar_siren">Radar Siren 🚨 (Built-in)</string>
+    <string name="sound_soft_chime">Soft Chime 🎵 (Built-in)</string>
+    <string name="sound_system_ringtone">System Ringtone 📱</string>
+    <string name="sound_silent_option">Silent 🔕</string>
+    <string name="label_glucose_brightness">Glucose &amp; IoB Color Brightness</string>
+    <string name="hint_glucose_brightness">Adjust brightness for comfortable night sleep</string>
 </resources>

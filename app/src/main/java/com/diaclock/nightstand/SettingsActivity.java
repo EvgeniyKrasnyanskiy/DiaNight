@@ -105,11 +105,21 @@ public class SettingsActivity extends AppCompatActivity {
     private CheckBox chkEnableAutoClose;
     private EditText etAutoCloseTime;
     private CheckBox chkDisableAutoScan;
+
+    // Glucose Color Brightness Dimmer UI
+    private SeekBar sbGlucoseBrightness;
+    private TextView tvGlucoseBrightnessValue;
+    private TextView tvPreviewLow;
+    private TextView tvPreviewNormal;
+    private TextView tvPreviewHigh;
+    private TextView tvPreviewIob;
     
     private String downloadUrl = null;
 
     // State Variables
     private int selectedColor = Color.WHITE;
+    private int glucoseBrightness = 80;
+    private String selectedSoundType = SoundGenerator.SOUND_BUILTIN_PULSE;
     private String selectedRingtoneUri = null;
     private MediaPlayer testMediaPlayer = null;
     private java.util.concurrent.ExecutorService scanExecutor = null;
@@ -202,6 +212,13 @@ public class SettingsActivity extends AppCompatActivity {
         chkEnableAutoClose = findViewById(R.id.chkEnableAutoClose);
         etAutoCloseTime = findViewById(R.id.etAutoCloseTime);
         chkDisableAutoScan = findViewById(R.id.chkDisableAutoScan);
+
+        sbGlucoseBrightness = findViewById(R.id.sbGlucoseBrightness);
+        tvGlucoseBrightnessValue = findViewById(R.id.tvGlucoseBrightnessValue);
+        tvPreviewLow = findViewById(R.id.tvPreviewLow);
+        tvPreviewNormal = findViewById(R.id.tvPreviewNormal);
+        tvPreviewHigh = findViewById(R.id.tvPreviewHigh);
+        tvPreviewIob = findViewById(R.id.tvPreviewIob);
     }
 
     private void loadSavedSettings() {
@@ -237,8 +254,25 @@ public class SettingsActivity extends AppCompatActivity {
         selectedColor = prefs.getInt("text_color", Color.WHITE);
         viewColorPreview.setBackgroundColor(selectedColor);
 
-        // Load and resolve chosen Ringtone Uri details
+        // Load glucose brightness (default 80%)
+        glucoseBrightness = prefs.getInt("glucose_brightness", 80);
+        if (sbGlucoseBrightness != null) {
+            sbGlucoseBrightness.setProgress(glucoseBrightness);
+            updateGlucoseBrightnessDisplay(glucoseBrightness);
+        }
+
+        // Load and resolve chosen sound type and Ringtone Uri details
+        selectedSoundType = prefs.getString("alarm_sound_type", null);
         selectedRingtoneUri = prefs.getString("alarm_uri", null);
+        if (selectedSoundType == null) {
+            if ("silent".equals(selectedRingtoneUri)) {
+                selectedSoundType = SoundGenerator.SOUND_SILENT;
+            } else if (selectedRingtoneUri != null) {
+                selectedSoundType = SoundGenerator.SOUND_SYSTEM;
+            } else {
+                selectedSoundType = SoundGenerator.SOUND_BUILTIN_PULSE;
+            }
+        }
         resolveRingtoneNameDisplay();
 
         // Display actual application version dynamically from PackageInfo
@@ -302,22 +336,58 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void resolveRingtoneNameDisplay() {
-        if (selectedRingtoneUri == null) {
-            tvRingtoneName.setText(getString(R.string.default_ringtone_name));
-        } else if (selectedRingtoneUri.equals("silent")) {
-            tvRingtoneName.setText(getString(R.string.ringtone_silent));
+        if (SoundGenerator.SOUND_BUILTIN_PULSE.equals(selectedSoundType)) {
+            tvRingtoneName.setText(getString(R.string.sound_pulse_beep));
+        } else if (SoundGenerator.SOUND_BUILTIN_RADAR.equals(selectedSoundType)) {
+            tvRingtoneName.setText(getString(R.string.sound_radar_siren));
+        } else if (SoundGenerator.SOUND_BUILTIN_CHIME.equals(selectedSoundType)) {
+            tvRingtoneName.setText(getString(R.string.sound_soft_chime));
+        } else if (SoundGenerator.SOUND_SILENT.equals(selectedSoundType)) {
+            tvRingtoneName.setText(getString(R.string.sound_silent_option));
         } else {
-            try {
-                Ringtone r = RingtoneManager.getRingtone(this, Uri.parse(selectedRingtoneUri));
-                if (r != null) {
-                    tvRingtoneName.setText(r.getTitle(this));
-                } else {
-                    tvRingtoneName.setText(getString(R.string.ringtone_custom));
+            if (selectedRingtoneUri == null) {
+                tvRingtoneName.setText(getString(R.string.sound_system_ringtone));
+            } else {
+                try {
+                    Ringtone r = RingtoneManager.getRingtone(this, Uri.parse(selectedRingtoneUri));
+                    if (r != null) {
+                        tvRingtoneName.setText(r.getTitle(this));
+                    } else {
+                        tvRingtoneName.setText(getString(R.string.ringtone_custom));
+                    }
+                } catch (Exception e) {
+                    tvRingtoneName.setText(getString(R.string.ringtone_default));
                 }
-            } catch (Exception e) {
-                tvRingtoneName.setText(getString(R.string.ringtone_default));
             }
         }
+    }
+
+    private void updateGlucoseBrightnessDisplay(int progress) {
+        if (progress < 15) progress = 15;
+        glucoseBrightness = progress;
+        if (tvGlucoseBrightnessValue != null) {
+            tvGlucoseBrightnessValue.setText(progress + "%");
+        }
+        if (tvPreviewLow != null) {
+            tvPreviewLow.setTextColor(applyBrightnessToColor(Color.parseColor("#FF0038"), progress));
+        }
+        if (tvPreviewNormal != null) {
+            tvPreviewNormal.setTextColor(applyBrightnessToColor(Color.parseColor("#34C759"), progress));
+        }
+        if (tvPreviewHigh != null) {
+            tvPreviewHigh.setTextColor(applyBrightnessToColor(Color.parseColor("#FFD700"), progress));
+        }
+        if (tvPreviewIob != null) {
+            tvPreviewIob.setTextColor(applyBrightnessToColor(Color.parseColor("#8E8E93"), progress));
+        }
+    }
+
+    public static int applyBrightnessToColor(int color, int brightnessPercent) {
+        float factor = Math.max(15, Math.min(100, brightnessPercent)) / 100.0f;
+        float[] hsv = new float[3];
+        Color.colorToHSV(color, hsv);
+        hsv[2] = hsv[2] * factor; // Scale V component
+        return Color.HSVToColor(Color.alpha(color), hsv);
     }
 
     private void setupListeners() {
@@ -366,18 +436,22 @@ public class SettingsActivity extends AppCompatActivity {
 
         btnColorCustom.setOnClickListener(v -> openColorPickerDialog());
 
+        // Glucose Brightness SeekBar Listener
+        if (sbGlucoseBrightness != null) {
+            sbGlucoseBrightness.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                    updateGlucoseBrightnessDisplay(progress);
+                }
+
+                @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+                @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+            });
+        }
+
         // Choose Ringtone Button Launcher
-        btnChooseRingtone.setOnClickListener(v -> {
-            Intent intent = new Intent(RingtoneManager.ACTION_RINGTONE_PICKER);
-            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM | RingtoneManager.TYPE_NOTIFICATION);
-            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, getString(R.string.title_choose_ringtone));
-            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true);
-            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true);
-            if (selectedRingtoneUri != null && !selectedRingtoneUri.equals("silent")) {
-                intent.putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, Uri.parse(selectedRingtoneUri));
-            }
-            startActivityForResult(intent, REQUEST_CODE_RINGTONE_PICKER);
-        });
+        btnChooseRingtone.setOnClickListener(v -> openSoundSelectionDialog());
+        tvRingtoneName.setOnClickListener(v -> openSoundSelectionDialog());
 
         // Test Alarm Button Trigger
         btnTestRingtone.setOnClickListener(v -> toggleTestAlarm());
@@ -480,6 +554,59 @@ public class SettingsActivity extends AppCompatActivity {
                 .show();
     }
 
+    private void openSoundSelectionDialog() {
+        final String[] items = new String[]{
+                getString(R.string.sound_pulse_beep),
+                getString(R.string.sound_radar_siren),
+                getString(R.string.sound_soft_chime),
+                getString(R.string.sound_system_ringtone),
+                getString(R.string.sound_silent_option)
+        };
+        int selectedIndex = 0;
+        if (SoundGenerator.SOUND_BUILTIN_PULSE.equals(selectedSoundType)) selectedIndex = 0;
+        else if (SoundGenerator.SOUND_BUILTIN_RADAR.equals(selectedSoundType)) selectedIndex = 1;
+        else if (SoundGenerator.SOUND_BUILTIN_CHIME.equals(selectedSoundType)) selectedIndex = 2;
+        else if (SoundGenerator.SOUND_SYSTEM.equals(selectedSoundType)) selectedIndex = 3;
+        else if (SoundGenerator.SOUND_SILENT.equals(selectedSoundType)) selectedIndex = 4;
+
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(getString(R.string.title_choose_ringtone))
+                .setSingleChoiceItems(items, selectedIndex, (dialog, which) -> {
+                    dialog.dismiss();
+                    stopTestAlarm();
+                    if (which == 0) {
+                        selectedSoundType = SoundGenerator.SOUND_BUILTIN_PULSE;
+                        selectedRingtoneUri = null;
+                        resolveRingtoneNameDisplay();
+                    } else if (which == 1) {
+                        selectedSoundType = SoundGenerator.SOUND_BUILTIN_RADAR;
+                        selectedRingtoneUri = null;
+                        resolveRingtoneNameDisplay();
+                    } else if (which == 2) {
+                        selectedSoundType = SoundGenerator.SOUND_BUILTIN_CHIME;
+                        selectedRingtoneUri = null;
+                        resolveRingtoneNameDisplay();
+                    } else if (which == 3) {
+                        selectedSoundType = SoundGenerator.SOUND_SYSTEM;
+                        Intent intent = new Intent(RingtoneManager.ACTION_RINGTONE_PICKER);
+                        intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM | RingtoneManager.TYPE_NOTIFICATION);
+                        intent.putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, getString(R.string.title_choose_ringtone));
+                        intent.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false);
+                        intent.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true);
+                        if (selectedRingtoneUri != null && !selectedRingtoneUri.equals("silent")) {
+                            intent.putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, Uri.parse(selectedRingtoneUri));
+                        }
+                        startActivityForResult(intent, REQUEST_CODE_RINGTONE_PICKER);
+                    } else if (which == 4) {
+                        selectedSoundType = SoundGenerator.SOUND_SILENT;
+                        selectedRingtoneUri = "silent";
+                        resolveRingtoneNameDisplay();
+                    }
+                })
+                .setNegativeButton(getString(R.string.btn_cancel), null)
+                .show();
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -487,15 +614,17 @@ public class SettingsActivity extends AppCompatActivity {
             Uri uri = data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
             if (uri != null) {
                 selectedRingtoneUri = uri.toString();
+                selectedSoundType = SoundGenerator.SOUND_SYSTEM;
             } else {
                 selectedRingtoneUri = "silent";
+                selectedSoundType = SoundGenerator.SOUND_SILENT;
             }
             resolveRingtoneNameDisplay();
         }
     }
 
     private void toggleTestAlarm() {
-        if (testMediaPlayer != null && testMediaPlayer.isPlaying()) {
+        if (SoundGenerator.isPlaying() || (testMediaPlayer != null && testMediaPlayer.isPlaying())) {
             stopTestAlarm();
         } else {
             startTestAlarm();
@@ -503,8 +632,18 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void startTestAlarm() {
-        if (selectedRingtoneUri != null && selectedRingtoneUri.equals("silent")) {
+        if (SoundGenerator.SOUND_SILENT.equals(selectedSoundType) || "silent".equals(selectedRingtoneUri)) {
             Toast.makeText(this, getString(R.string.msg_silent_mode), Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (SoundGenerator.isBuiltin(selectedSoundType)) {
+            btnTestRingtone.setText(getString(R.string.btn_test_alarm_stop));
+            SoundGenerator.playPreview(selectedSoundType, () -> runOnUiThread(() -> {
+                if (!isFinishing() && !isDestroyed()) {
+                    btnTestRingtone.setText(getString(R.string.btn_test_alarm_start));
+                }
+            }));
             return;
         }
 
@@ -551,15 +690,17 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void stopTestAlarm() {
+        SoundGenerator.stopAlarm();
         if (testMediaPlayer != null) {
             try {
                 if (testMediaPlayer.isPlaying()) {
                     testMediaPlayer.stop();
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
+            } catch (Exception ignored) {
             } finally {
-                testMediaPlayer.release();
+                try {
+                    testMediaPlayer.release();
+                } catch (Exception ignored) {}
                 testMediaPlayer = null;
             }
         }
@@ -689,6 +830,8 @@ public class SettingsActivity extends AppCompatActivity {
         editor.putFloat("night_low", nightLow);
         editor.putFloat("night_high", nightHigh);
         editor.putInt("text_color", selectedColor);
+        editor.putInt("glucose_brightness", sbGlucoseBrightness != null ? sbGlucoseBrightness.getProgress() : 80);
+        editor.putString("alarm_sound_type", selectedSoundType);
         editor.putString("alarm_uri", selectedRingtoneUri);
         editor.putInt("snooze_interval", snoozeInterval);
         editor.apply();

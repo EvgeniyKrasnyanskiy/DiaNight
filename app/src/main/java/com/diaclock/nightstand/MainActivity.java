@@ -144,6 +144,9 @@ public class MainActivity extends AppCompatActivity {
     private String autoCloseTime = "07:00";
     private String lastAutoCloseTriggeredTime = "";
     private boolean disableAutoScan = false;
+    private int glucoseBrightness = 80;
+    private String alarmSoundType = SoundGenerator.SOUND_BUILTIN_PULSE;
+    private String alarmUriStr = null;
 
     // Camera Flash Alarm state and handlers
     private final Handler flashHandler = new Handler(Looper.getMainLooper());
@@ -565,6 +568,19 @@ public class MainActivity extends AppCompatActivity {
         enableAutoClose = prefs.getBoolean("enable_autoclose", false);
         autoCloseTime = prefs.getString("autoclose_time", "07:00");
         disableAutoScan = prefs.getBoolean("disable_auto_scan", false);
+        glucoseBrightness = prefs.getInt("glucose_brightness", 80);
+        
+        alarmSoundType = prefs.getString("alarm_sound_type", null);
+        alarmUriStr = prefs.getString("alarm_uri", null);
+        if (alarmSoundType == null) {
+            if ("silent".equals(alarmUriStr)) {
+                alarmSoundType = SoundGenerator.SOUND_SILENT;
+            } else if (alarmUriStr != null) {
+                alarmSoundType = SoundGenerator.SOUND_SYSTEM;
+            } else {
+                alarmSoundType = SoundGenerator.SOUND_BUILTIN_PULSE;
+            }
+        }
         
         // Cache SHA-1 hash of API secret to avoid recomputing on every request
         cachedSecretHash = (apiSecret != null && !apiSecret.trim().isEmpty())
@@ -650,19 +666,23 @@ public class MainActivity extends AppCompatActivity {
         tvColon.setTextColor(textColor);
         tvMinutes.setTextColor(textColor);
         
-        // Dynamically color-code glucose values separately from clock
+        // Dynamically color-code glucose values separately from clock with custom brightness dimming
         if (lastGlucoseMmol > 0) {
             if (lastGlucoseMmol < 3.9) {
-                tvGlucose.setTextColor(Color.parseColor("#FF3B30")); // Red: Hypoglycemia
+                tvGlucose.setTextColor(applyBrightnessToColor(Color.parseColor("#FF0038"), glucoseBrightness)); // Vibrant Ruby Red: Hypoglycemia
             } else if (lastGlucoseMmol >= 3.9 && lastGlucoseMmol <= 7.8) {
-                tvGlucose.setTextColor(Color.parseColor("#34C759")); // Green: Target normal range
+                tvGlucose.setTextColor(applyBrightnessToColor(Color.parseColor("#34C759"), glucoseBrightness)); // Target Green: Normal range
             } else if (lastGlucoseMmol > 7.8 && lastGlucoseMmol <= 13.9) {
-                tvGlucose.setTextColor(Color.parseColor("#FFD700")); // Yellow: High glucose
+                tvGlucose.setTextColor(applyBrightnessToColor(Color.parseColor("#FFD700"), glucoseBrightness)); // Yellow: High glucose
             } else {
-                tvGlucose.setTextColor(Color.parseColor("#FF3B30")); // Red: Severe Hyperglycemia
+                tvGlucose.setTextColor(applyBrightnessToColor(Color.parseColor("#FF0038"), glucoseBrightness)); // Vibrant Ruby Red: Severe Hyperglycemia
             }
         } else {
             tvGlucose.setTextColor(textColor); // Default color when offline
+        }
+
+        if (tvIoB != null) {
+            tvIoB.setTextColor(applyBrightnessToColor(Color.parseColor("#8E8E93"), glucoseBrightness));
         }
         
         tvHours.getPaint().setShader(null);
@@ -674,6 +694,14 @@ public class MainActivity extends AppCompatActivity {
         tvColon.invalidate();
         tvMinutes.invalidate();
         tvGlucose.invalidate();
+    }
+
+    private int applyBrightnessToColor(int color, int brightnessPercent) {
+        float factor = Math.max(15, Math.min(100, brightnessPercent)) / 100.0f;
+        float[] hsv = new float[3];
+        Color.colorToHSV(color, hsv);
+        hsv[2] = hsv[2] * factor; // Scale V component
+        return Color.HSVToColor(Color.alpha(color), hsv);
     }
 
     // Convert xDrip+ English direction strings into Unicode trend arrows
@@ -1127,15 +1155,44 @@ public class MainActivity extends AppCompatActivity {
         // Early exit if alarm is already playing to prevent race conditions
         if (isAlarmSounding) return;
 
+        if (SoundGenerator.SOUND_SILENT.equals(alarmSoundType) || "silent".equals(alarmUriStr)) {
+            return; // Silent mode chosen by the user
+        }
+
+        // 1. Built-in algorithmic sound generator via AudioTrack
+        if (SoundGenerator.isBuiltin(alarmSoundType)) {
+            isAlarmSounding = true;
+            SoundGenerator.startAlarm(alarmSoundType);
+
+            if (alarmUseFlash) {
+                startFlashBlinking();
+            }
+
+            // Start rich pulsing animation between black and deep ruby red
+            if (alarmVisualAnimator == null) {
+                alarmVisualAnimator = ValueAnimator.ofObject(new android.animation.ArgbEvaluator(), Color.BLACK, Color.parseColor("#4A000A"));
+                alarmVisualAnimator.setDuration(1200);
+                alarmVisualAnimator.setRepeatCount(ValueAnimator.INFINITE);
+                alarmVisualAnimator.setRepeatMode(ValueAnimator.REVERSE);
+                alarmVisualAnimator.addUpdateListener(animation -> {
+                    if (mainRootLayout != null && !isActivityDestroyed) {
+                        mainRootLayout.setBackgroundColor((int) animation.getAnimatedValue());
+                    }
+                });
+                alarmVisualAnimator.start();
+            }
+
+            // Schedule auto-snooze
+            mainHandler.removeCallbacks(autoSnoozeRunnable);
+            mainHandler.postDelayed(autoSnoozeRunnable, MAX_ALARM_DURATION_MS);
+            
+            Toast.makeText(MainActivity.this, getString(R.string.msg_alarm_warning), Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        // 2. System ringtone playback via MediaPlayer
         if (mediaPlayer == null) {
             try {
-                SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-                String alarmUriStr = prefs.getString("alarm_uri", null);
-                
-                if (alarmUriStr != null && alarmUriStr.equals("silent")) {
-                    return; // Silent mode chosen by the user
-                }
-
                 Uri alarmUri;
                 if (alarmUriStr == null) {
                     alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
@@ -1170,10 +1227,10 @@ public class MainActivity extends AppCompatActivity {
                             startFlashBlinking();
                         }
 
-                        // Start gentle flashing animation pulsing the background between black and dark red
+                        // Start rich pulsing animation between black and deep ruby red
                         if (alarmVisualAnimator == null) {
-                            alarmVisualAnimator = ValueAnimator.ofObject(new android.animation.ArgbEvaluator(), Color.BLACK, Color.parseColor("#330000"));
-                            alarmVisualAnimator.setDuration(1500);
+                            alarmVisualAnimator = ValueAnimator.ofObject(new android.animation.ArgbEvaluator(), Color.BLACK, Color.parseColor("#4A000A"));
+                            alarmVisualAnimator.setDuration(1200);
                             alarmVisualAnimator.setRepeatCount(ValueAnimator.INFINITE);
                             alarmVisualAnimator.setRepeatMode(ValueAnimator.REVERSE);
                             alarmVisualAnimator.addUpdateListener(animation -> {
@@ -1209,6 +1266,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void stopAlarmSound() {
         isAlarmSounding = false;
+        SoundGenerator.stopAlarm();
         stopFlashBlinking();
         mainHandler.removeCallbacks(autoSnoozeRunnable);
         if (alarmVisualAnimator != null) {
