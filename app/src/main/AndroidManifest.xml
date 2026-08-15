@@ -43,6 +43,7 @@
             android:exported="false"
             android:screenOrientation="sensor"
             android:theme="@style/Theme.DiaClock.Settings"
+            android:windowSoftInputMode="stateHidden|adjustResize"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <!-- AppCompat Locale Auto-Store Service -->

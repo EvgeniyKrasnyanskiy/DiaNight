@@ -139,6 +139,7 @@ public class SettingsActivity extends AppCompatActivity {
                         | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                         | View.SYSTEM_UI_FLAG_FULLSCREEN
                         | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
 
         initViews();
         loadSavedSettings();
@@ -1262,41 +1263,30 @@ public class SettingsActivity extends AppCompatActivity {
         
         Request request = new Request.Builder()
                 .url(url)
-                .addHeader("User-Agent", "DiaNight-App")
+                .addHeader("Accept", "application/vnd.github.v3+json")
+                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 DiaNight-App")
                 .build();
                 
         HttpClientProvider.getClient().newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                Log.e("SettingsActivity", "Update check failed: " + e.getMessage(), e);
-                runOnUiThread(() -> {
-                    if (isFinishing() || isDestroyed()) return;
-                    tvUpdateStatus.setText(getString(R.string.msg_update_check_failed));
-                    if (!silent) {
-                        Toast.makeText(SettingsActivity.this, getString(R.string.err_update_check), Toast.LENGTH_SHORT).show();
-                    }
-                });
+                Log.w("SettingsActivity", "GitHub API check failed, falling back to web redirect: " + e.getMessage());
+                checkUpdatesViaHtmlRedirect(silent);
             }
 
             @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
                 if (!response.isSuccessful()) {
-                    final int code = response.code();
-                    runOnUiThread(() -> {
-                        if (isFinishing() || isDestroyed()) return;
-                        tvUpdateStatus.setText(getString(R.string.msg_update_check_error_code, code));
-                        if (!silent) {
-                            Toast.makeText(SettingsActivity.this, getString(R.string.err_update_check_code, code), Toast.LENGTH_SHORT).show();
-                        }
-                    });
+                    Log.w("SettingsActivity", "GitHub API returned " + response.code() + ", falling back to web redirect");
                     response.close();
+                    checkUpdatesViaHtmlRedirect(silent);
                     return;
                 }
                 
-                String body = response.body() != null ? response.body().string() : "";
-                response.close();
-                
                 try {
+                    String body = response.body() != null ? response.body().string() : "";
+                    response.close();
+                    
                     com.google.gson.JsonObject root = JsonParser.parseString(body).getAsJsonObject();
                     String tagName = root.has("tag_name") ? root.get("tag_name").getAsString() : "";
                     String htmlUrl = root.has("html_url") ? root.get("html_url").getAsString() : "";
@@ -1316,51 +1306,97 @@ public class SettingsActivity extends AppCompatActivity {
                     }
                     
                     final String remoteVer = tagName.startsWith("v") ? tagName.substring(1) : tagName;
-                    
-                    String localVerStr = "1.1.0";
-                    try {
-                        localVerStr = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-                    } catch (Exception e) {
-                        // ignore
-                    }
-                    
-                    final String localVer = localVerStr;
-                    final boolean isNewer = isVersionNewer(localVer, remoteVer);
-                    final String finalApkUrl = apkUrl;
-                    
-                    runOnUiThread(() -> {
-                        if (isFinishing() || isDestroyed()) return;
-                        if (isNewer) {
-                            tvUpdateStatus.setText(getString(R.string.msg_update_available, remoteVer, localVer));
-                            btnDownloadUpdate.setVisibility(View.VISIBLE);
-                            downloadUrl = finalApkUrl;
-                            if (!silent) {
-                                new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                                        .setTitle(getString(R.string.dialog_update_title))
-                                        .setMessage(getString(R.string.dialog_update_msg, remoteVer))
-                                        .setPositiveButton(getString(R.string.btn_download), (dialog, which) -> {
-                                            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(finalApkUrl)));
-                                        })
-                                        .setNegativeButton(getString(R.string.btn_cancel), null)
-                                        .show();
-                                Toast.makeText(SettingsActivity.this, getString(R.string.msg_update_toast, remoteVer), Toast.LENGTH_LONG).show();
-                            }
-                        } else {
-                            tvUpdateStatus.setText(getString(R.string.msg_up_to_date, localVer));
-                            btnDownloadUpdate.setVisibility(View.GONE);
-                            if (!silent) {
-                                Toast.makeText(SettingsActivity.this, getString(R.string.msg_no_updates), Toast.LENGTH_SHORT).show();
-                            }
-                        }
-                    });
+                    handleUpdateResult(remoteVer, apkUrl, silent);
                 } catch (Exception e) {
+                    Log.w("SettingsActivity", "Failed to parse GitHub API JSON, falling back to web redirect: " + e.getMessage());
+                    checkUpdatesViaHtmlRedirect(silent);
+                }
+            }
+        });
+    }
+
+    private void checkUpdatesViaHtmlRedirect(boolean silent) {
+        okhttp3.OkHttpClient noRedirectClient = HttpClientProvider.getClient().newBuilder()
+                .followRedirects(false)
+                .followSslRedirects(false)
+                .build();
+
+        Request request = new Request.Builder()
+                .url("https://github.com/EvgeniyKrasnyanskiy/DiaNight/releases/latest")
+                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                .build();
+
+        noRedirectClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    tvUpdateStatus.setText(getString(R.string.msg_update_check_failed));
+                    if (!silent) {
+                        Toast.makeText(SettingsActivity.this, getString(R.string.err_update_check), Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                String location = response.header("Location");
+                response.close();
+
+                if (location != null && location.contains("/tag/")) {
+                    String tag = location.substring(location.lastIndexOf("/tag/") + 5).trim();
+                    String remoteVer = tag.startsWith("v") ? tag.substring(1) : tag;
+                    String apkUrl = "https://github.com/EvgeniyKrasnyanskiy/DiaNight/releases/download/" + tag + "/DiaNight-" + tag + "-release.apk";
+                    handleUpdateResult(remoteVer, apkUrl, silent);
+                } else {
                     runOnUiThread(() -> {
                         if (isFinishing() || isDestroyed()) return;
-                        tvUpdateStatus.setText(getString(R.string.msg_update_parse_error));
+                        tvUpdateStatus.setText(getString(R.string.msg_update_check_failed));
                         if (!silent) {
-                            Toast.makeText(SettingsActivity.this, getString(R.string.err_update_parse), Toast.LENGTH_SHORT).show();
+                            Toast.makeText(SettingsActivity.this, getString(R.string.err_update_check), Toast.LENGTH_SHORT).show();
                         }
                     });
+                }
+            }
+        });
+    }
+
+    private void handleUpdateResult(String remoteVer, String apkUrl, boolean silent) {
+        String localVerStr = "1.1.0";
+        try {
+            localVerStr = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception ignored) {}
+
+        final String localVer = localVerStr;
+        final boolean isNewer = isVersionNewer(localVer, remoteVer);
+        final String finalApkUrl = apkUrl;
+
+        runOnUiThread(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            if (isNewer) {
+                tvUpdateStatus.setText(getString(R.string.msg_update_available, remoteVer, localVer));
+                btnDownloadUpdate.setVisibility(View.VISIBLE);
+                downloadUrl = finalApkUrl;
+                if (!silent) {
+                    new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                            .setTitle(getString(R.string.dialog_update_title))
+                            .setMessage(getString(R.string.dialog_update_msg, remoteVer))
+                            .setPositiveButton(getString(R.string.btn_download), (dialog, which) -> {
+                                try {
+                                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(finalApkUrl)));
+                                } catch (Exception e) {
+                                    Toast.makeText(SettingsActivity.this, getString(R.string.err_open_browser), Toast.LENGTH_SHORT).show();
+                                }
+                            })
+                            .setNegativeButton(getString(R.string.btn_cancel), null)
+                            .show();
+                    Toast.makeText(SettingsActivity.this, getString(R.string.msg_update_toast, remoteVer), Toast.LENGTH_LONG).show();
+                }
+            } else {
+                tvUpdateStatus.setText(getString(R.string.msg_up_to_date, localVer));
+                btnDownloadUpdate.setVisibility(View.GONE);
+                if (!silent) {
+                    Toast.makeText(SettingsActivity.this, getString(R.string.msg_no_updates), Toast.LENGTH_SHORT).show();
                 }
             }
         });
