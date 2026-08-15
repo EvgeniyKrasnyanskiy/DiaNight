@@ -32,3 +32,46 @@
 6. `e94da65` — `feat: configure release signing with official dianight.jks keystore`
 7. `43415a9` — `fix: adjust poll interval to 30s, timeout to 15s, and trigger warning on 2+ consecutive failures`
 8. `8efad07` — `fix: increase network warning threshold to 10 consecutive failures (5 min)`
+
+## Сессия 15–16 Августа 2026 [Completed]
+
+### 1. Реализованные фичи и улучшения:
+- **Устранение багов код-ревью:**
+  - Аудиопоток тревог переведён на аппаратный `STREAM_ALARM` / `USAGE_ALARM` с асинхронной подготовкой `prepareAsync()`.
+  - Исправлено сопоставление времени автозакрытия (`isAutoCloseTimeMatch`) для форматов с/без ведущих нулей.
+  - Устранена утечка камеры в `onPause()`.
+  - Безопасная очистка пула потоков сканирования подсети (`scanExecutor.shutdownNow()`).
+  - Защита от сбоя SHA-1 в `CryptoUtils.computeSHA1()`.
+- **Встроенные программные звуки тревоги (`SoundGenerator.java`):**
+  - Алгоритмический PCM-синтезатор (44.1 кГц, 16-бит) на базе `AudioTrack.MODE_STATIC` (`STREAM_ALARM`).
+  - 3 встроенных звука: «Импульсный бипер» (880/1760 Гц), «Радар / Сирена» (600–1400 Гц), «Мягкий перезвон» (аккорд с затуханием).
+  - Аппаратный циклический повтор (`setLoopPoints`) и мгновенное предпрослушивание в диалоге настроек.
+- **Регулировка яркости цвета сахара и IoB (Color Dimmer):**
+  - В раздел «Настройки табло» добавлен ползунок `SeekBar` (диапазон 15%–100%, по умолчанию 80%) с интерактивным предпросмотром цветов.
+  - Динамическое масштабирование цвета через HSV Value в `MainActivity.java`.
+- **Насыщенный рубиновый цвет тревоги:**
+  - Цвет текста сахара при гипо/гипергликемии: `#FF0038`.
+  - Глубокая бархатно-красная пульсация фона: `#4A000A`.
+- **Сетевые настройки и удержание Wi-Fi:**
+  - Чекбокс «Статический IP (не сканировать сеть)» для отключения лишнего фонового сканирования.
+  - Внедрён системный `WifiLock` (`WIFI_MODE_FULL_HIGH_PERF`), предотвращающий уход Wi-Fi чипа в глубокий сон при работе экрана.
+  - Опция «Автоперезапуск Wi-Fi при сбое связи» (Watchdog) для автоматического переподключения/рестарта Wi-Fi модуля при 10 сбоях подряд на старых устройствах (MediaTek / Android 4.4).
+- **Защита от лимитов GitHub API (Ошибка 403):**
+  - Двухуровневая проверка обновлений: если GitHub REST API возвращает 403 (лимит 60 req/hr на общий IP мобильного оператора), приложение автоматически считывает версию через веб-редирект `github.com/releases/latest`, работающий со 100% надёжностью на всех версиях Android.
+- **Скрытие экранной клавиатуры:**
+  - Установлен режим `windowSoftInputMode="stateHidden|adjustResize"` и убран автоматический фокус с первого поля ввода при входе в настройки.
+- **Актуализация руководства:**
+  - Встроенная справка дополнена описанием всех новых возможностей.
+
+### 2. Сборка и Релизы:
+- Скомпилированы релизные APK: `v1.1.73`, `v1.1.74`, `v1.1.75`, `v1.1.77`.
+- Релиз `v1.1.77` установлен на подключённый смартфон Alcatel OneTouch IDOL 2 через ADB.
+- Опубликован официальный релиз на GitHub: `v1.1.77` (`https://github.com/EvgeniyKrasnyanskiy/DiaNight/releases/tag/v1.1.77`).
+
+### 3. Коммиты сессии:
+1. `ea8f82c` — `feat: add static IP option and fix alarm stream, autoclose, and resource leaks`
+2. `45563aa` — `feat: add built-in PCM sound generator, glucose color brightness slider, and rich ruby alarm red`
+3. `a1c99b3` — `fix: refactor SoundGenerator to MODE_STATIC for reliable playback and preview`
+4. `cda6fbf` — `feat: add WifiLock high-performance keepalive, WiFi watchdog reconnect option, and update help manual`
+5. `ddececf` — `fix: resolve GitHub API 403 rate limit with fallback and hide soft keyboard on settings launch`
+6. `2822963` — `docs: mark all tasks as completed for v1.1.77`
