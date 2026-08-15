@@ -9,7 +9,7 @@ import android.util.Log;
 
 /**
  * High-performance algorithmic PCM sound generator.
- * Synthesizes audible alarm sounds on the fly using AudioTrack on STREAM_ALARM without external audio assets.
+ * Synthesizes audible alarm sounds on the fly using AudioTrack in MODE_STATIC on STREAM_ALARM.
  */
 public final class SoundGenerator {
 
@@ -25,7 +25,6 @@ public final class SoundGenerator {
     private static final Object lock = new Object();
     private static volatile boolean isPlaying = false;
     private static volatile AudioTrack activeAudioTrack = null;
-    private static volatile Thread playbackThread = null;
 
     private SoundGenerator() {
         // Utility class
@@ -37,44 +36,106 @@ public final class SoundGenerator {
                SOUND_BUILTIN_CHIME.equals(soundType);
     }
 
+    public static boolean isPlaying() {
+        synchronized (lock) {
+            return isPlaying && activeAudioTrack != null;
+        }
+    }
+
     /**
-     * Starts looping playback of the specified built-in alarm sound.
+     * Starts continuous looping playback of the specified built-in alarm sound.
      */
     public static void startAlarm(final String soundType) {
-        synchronized (lock) {
-            stopAlarm();
-            isPlaying = true;
-            playbackThread = new Thread(() -> runAudioLoop(soundType, true), "SoundGenerator-Alarm");
-            playbackThread.setPriority(Thread.MAX_PRIORITY);
-            playbackThread.start();
-        }
+        startPlayback(soundType, true, null);
     }
 
     /**
      * Plays a single short preview of the specified sound and automatically stops.
      */
     public static void playPreview(final String soundType, final Runnable onComplete) {
+        startPlayback(soundType, false, onComplete);
+    }
+
+    private static void startPlayback(final String soundType, final boolean loop, final Runnable onComplete) {
         synchronized (lock) {
             stopAlarm();
-            isPlaying = true;
-            playbackThread = new Thread(() -> {
-                try {
-                    runAudioLoop(soundType, false);
-                } finally {
-                    synchronized (lock) {
-                        isPlaying = false;
-                    }
-                    if (onComplete != null) {
-                        onComplete.run();
-                    }
+            try {
+                short[] buffer = generateSoundBuffer(soundType);
+                if (buffer == null || buffer.length == 0) return;
+
+                int bufferSizeBytes = buffer.length * 2;
+                AudioTrack track;
+
+                if (Build.VERSION.SDK_INT >= 21) {
+                    AudioAttributes attributes = new AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build();
+                    AudioFormat format = new AudioFormat.Builder()
+                            .setSampleRate(SAMPLE_RATE)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .build();
+                    track = new AudioTrack(attributes, format, bufferSizeBytes, AudioTrack.MODE_STATIC, AudioManager.AUDIO_SESSION_ID_GENERATE);
+                } else {
+                    track = new AudioTrack(
+                            AudioManager.STREAM_ALARM,
+                            SAMPLE_RATE,
+                            AudioFormat.CHANNEL_OUT_MONO,
+                            AudioFormat.ENCODING_PCM_16BIT,
+                            bufferSizeBytes,
+                            AudioTrack.MODE_STATIC
+                    );
                 }
-            }, "SoundGenerator-Preview");
-            playbackThread.start();
+
+                int written = track.write(buffer, 0, buffer.length);
+                if (written <= 0) {
+                    Log.e(TAG, "Failed to write PCM samples to AudioTrack: " + written);
+                    track.release();
+                    return;
+                }
+
+                if (loop) {
+                    track.setLoopPoints(0, buffer.length, -1);
+                }
+
+                if (Build.VERSION.SDK_INT >= 21) {
+                    track.setVolume(1.0f);
+                } else {
+                    track.setStereoVolume(1.0f, 1.0f);
+                }
+
+                activeAudioTrack = track;
+                isPlaying = true;
+                track.play();
+                Log.d(TAG, "Started AudioTrack MODE_STATIC playback for: " + soundType + " (loop=" + loop + ")");
+
+                if (!loop) {
+                    long durationMs = (long) (buffer.length * 1000.0 / SAMPLE_RATE);
+                    new Thread(() -> {
+                        try {
+                            Thread.sleep(durationMs + 100);
+                        } catch (InterruptedException ignored) {}
+                        synchronized (lock) {
+                            if (activeAudioTrack == track) {
+                                stopAlarm();
+                            }
+                        }
+                        if (onComplete != null) {
+                            onComplete.run();
+                        }
+                    }, "SoundGenerator-PreviewTimer").start();
+                }
+
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to start SoundGenerator: " + e.getMessage(), e);
+                stopAlarm();
+            }
         }
     }
 
     /**
-     * Stops any currently playing audio generation.
+     * Stops any currently playing audio generation and releases the AudioTrack.
      */
     public static void stopAlarm() {
         synchronized (lock) {
@@ -90,87 +151,6 @@ public final class SoundGenerator {
                 } catch (Exception ignored) {}
                 activeAudioTrack = null;
             }
-            if (playbackThread != null) {
-                playbackThread.interrupt();
-                playbackThread = null;
-            }
-        }
-    }
-
-    public static boolean isPlaying() {
-        return isPlaying;
-    }
-
-    private static void runAudioLoop(String soundType, boolean loop) {
-        short[] buffer = generateSoundBuffer(soundType);
-        if (buffer == null || buffer.length == 0) return;
-
-        int bufferSize = Math.max(buffer.length * 2, AudioTrack.getMinBufferSize(
-                SAMPLE_RATE,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-        ));
-
-        AudioTrack track = null;
-        try {
-            if (Build.VERSION.SDK_INT >= 21) {
-                AudioAttributes attributes = new AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build();
-                AudioFormat format = new AudioFormat.Builder()
-                        .setSampleRate(SAMPLE_RATE)
-                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .build();
-                track = new AudioTrack(attributes, format, bufferSize, AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE);
-            } else {
-                track = new AudioTrack(
-                        AudioManager.STREAM_ALARM,
-                        SAMPLE_RATE,
-                        AudioFormat.CHANNEL_OUT_MONO,
-                        AudioFormat.ENCODING_PCM_16BIT,
-                        bufferSize,
-                        AudioTrack.MODE_STREAM
-                );
-            }
-
-            synchronized (lock) {
-                if (!isPlaying) {
-                    track.release();
-                    return;
-                }
-                activeAudioTrack = track;
-            }
-
-            track.play();
-
-            do {
-                int written = 0;
-                while (written < buffer.length && isPlaying && !Thread.currentThread().isInterrupted()) {
-                    int result = track.write(buffer, written, buffer.length - written);
-                    if (result <= 0) break;
-                    written += result;
-                }
-                if (!loop) break;
-            } while (isPlaying && !Thread.currentThread().isInterrupted());
-
-        } catch (Exception e) {
-            Log.e(TAG, "AudioTrack playback error: " + e.getMessage(), e);
-        } finally {
-            if (track != null) {
-                try {
-                    track.stop();
-                } catch (Exception ignored) {}
-                try {
-                    track.release();
-                } catch (Exception ignored) {}
-                synchronized (lock) {
-                    if (activeAudioTrack == track) {
-                        activeAudioTrack = null;
-                    }
-                }
-            }
         }
     }
 
@@ -185,52 +165,50 @@ public final class SoundGenerator {
     }
 
     /**
-     * Sound 1: Pulse Beep (Fast dual high-pitch urgent beeps: 880 Hz & 1760 Hz).
-     * Duration: 1.5 seconds cycle.
+     * Sound 1: Pulse Beep (Fast urgent dual-tone beeps: 880 Hz & 1760 Hz).
+     * Total cycle duration: 1.2 seconds.
      */
     private static short[] generatePulseBeep() {
-        int totalSamples = (int) (SAMPLE_RATE * 1.5); // 1.5s cycle
+        int totalSamples = (int) (SAMPLE_RATE * 1.2);
         short[] samples = new short[totalSamples];
 
-        int beep1Samples = (int) (SAMPLE_RATE * 0.12); // 120ms
+        int beep1Samples = (int) (SAMPLE_RATE * 0.14); // 140ms
         int gapSamples = (int) (SAMPLE_RATE * 0.08);   // 80ms
-        int beep2Samples = (int) (SAMPLE_RATE * 0.16); // 160ms
+        int beep2Samples = (int) (SAMPLE_RATE * 0.18); // 180ms
 
-        // Beep 1 (880 Hz + 1760 Hz harmonic)
+        // Beep 1 (880 Hz + 1760 Hz)
         for (int i = 0; i < beep1Samples; i++) {
             double t = (double) i / SAMPLE_RATE;
-            double envelope = Math.sin(Math.PI * i / beep1Samples); // Smooth sine envelope
-            double val = (0.7 * Math.sin(2 * Math.PI * 880 * t) + 0.3 * Math.sin(2 * Math.PI * 1760 * t)) * envelope;
+            double envelope = Math.sin(Math.PI * i / beep1Samples);
+            double val = (0.75 * Math.sin(2 * Math.PI * 880 * t) + 0.25 * Math.sin(2 * Math.PI * 1760 * t)) * envelope;
             samples[i] = (short) (val * 32000);
         }
 
-        // Beep 2 (1046.5 Hz + 2093 Hz harmonic)
+        // Beep 2 (1046.5 Hz + 2093 Hz)
         int start2 = beep1Samples + gapSamples;
         for (int i = 0; i < beep2Samples; i++) {
             double t = (double) i / SAMPLE_RATE;
             double envelope = Math.sin(Math.PI * i / beep2Samples);
-            double val = (0.7 * Math.sin(2 * Math.PI * 1046.5 * t) + 0.3 * Math.sin(2 * Math.PI * 2093 * t)) * envelope;
+            double val = (0.75 * Math.sin(2 * Math.PI * 1046.5 * t) + 0.25 * Math.sin(2 * Math.PI * 2093 * t)) * envelope;
             samples[start2 + i] = (short) (val * 32000);
         }
 
-        // Rest of buffer is silence
         return samples;
     }
 
     /**
      * Sound 2: Radar Siren (Ascending frequency sweep 600 Hz -> 1400 Hz).
-     * Duration: 1.2 seconds cycle.
+     * Total cycle duration: 1.2 seconds.
      */
     private static short[] generateRadarSiren() {
         int totalSamples = (int) (SAMPLE_RATE * 1.2);
         short[] samples = new short[totalSamples];
 
-        int sweepSamples = (int) (SAMPLE_RATE * 0.8); // 800ms sweep, 400ms pause
+        int sweepSamples = (int) (SAMPLE_RATE * 0.85); // 850ms sweep, 350ms pause
         double phase = 0.0;
 
         for (int i = 0; i < sweepSamples; i++) {
             double progress = (double) i / sweepSamples;
-            // Frequency sweeps from 600 to 1400 Hz
             double freq = 600.0 + 800.0 * progress;
             phase += 2 * Math.PI * freq / SAMPLE_RATE;
             double envelope = Math.sin(Math.PI * progress);
@@ -243,20 +221,20 @@ public final class SoundGenerator {
 
     /**
      * Sound 3: Soft Chime (Harmonic chord C5+E5+G5+C6 with natural exponential decay).
-     * Duration: 2.0 seconds cycle.
+     * Total cycle duration: 1.8 seconds.
      */
     private static short[] generateSoftChime() {
-        int totalSamples = (int) (SAMPLE_RATE * 2.0);
+        int totalSamples = (int) (SAMPLE_RATE * 1.8);
         short[] samples = new short[totalSamples];
 
         double[] freqs = {523.25, 659.25, 783.99, 1046.50};
-        double[] weights = {0.4, 0.3, 0.2, 0.1};
+        double[] weights = {0.35, 0.30, 0.20, 0.15};
 
-        int chimeSamples = (int) (SAMPLE_RATE * 1.6);
+        int chimeSamples = (int) (SAMPLE_RATE * 1.5);
 
         for (int i = 0; i < chimeSamples; i++) {
             double t = (double) i / SAMPLE_RATE;
-            double decay = Math.exp(-2.5 * t); // Smooth natural chime decay
+            double decay = Math.exp(-2.2 * t);
             double val = 0.0;
             for (int f = 0; f < freqs.length; f++) {
                 val += weights[f] * Math.sin(2 * Math.PI * freqs[f] * t);

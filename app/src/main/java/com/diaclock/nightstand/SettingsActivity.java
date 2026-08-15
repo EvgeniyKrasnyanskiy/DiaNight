@@ -578,14 +578,17 @@ public class SettingsActivity extends AppCompatActivity {
                         selectedSoundType = SoundGenerator.SOUND_BUILTIN_PULSE;
                         selectedRingtoneUri = null;
                         resolveRingtoneNameDisplay();
+                        SoundGenerator.playPreview(selectedSoundType, null);
                     } else if (which == 1) {
                         selectedSoundType = SoundGenerator.SOUND_BUILTIN_RADAR;
                         selectedRingtoneUri = null;
                         resolveRingtoneNameDisplay();
+                        SoundGenerator.playPreview(selectedSoundType, null);
                     } else if (which == 2) {
                         selectedSoundType = SoundGenerator.SOUND_BUILTIN_CHIME;
                         selectedRingtoneUri = null;
                         resolveRingtoneNameDisplay();
+                        SoundGenerator.playPreview(selectedSoundType, null);
                     } else if (which == 3) {
                         selectedSoundType = SoundGenerator.SOUND_SYSTEM;
                         Intent intent = new Intent(RingtoneManager.ACTION_RINGTONE_PICKER);
@@ -639,11 +642,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         if (SoundGenerator.isBuiltin(selectedSoundType)) {
             btnTestRingtone.setText(getString(R.string.btn_test_alarm_stop));
-            SoundGenerator.playPreview(selectedSoundType, () -> runOnUiThread(() -> {
-                if (!isFinishing() && !isDestroyed()) {
-                    btnTestRingtone.setText(getString(R.string.btn_test_alarm_start));
-                }
-            }));
+            SoundGenerator.startAlarm(selectedSoundType);
             return;
         }
 
