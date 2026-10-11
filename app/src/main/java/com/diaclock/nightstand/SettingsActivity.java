@@ -375,13 +375,13 @@ public class SettingsActivity extends AppCompatActivity {
             tvGlucoseBrightnessValue.setText(progress + "%");
         }
         if (tvPreviewLow != null) {
-            tvPreviewLow.setTextColor(applyBrightnessToColor(Color.parseColor("#FF0038"), progress));
+            tvPreviewLow.setTextColor(applyBrightnessToColor(MainActivity.getGlucoseStandardColor(2.8), progress));
         }
         if (tvPreviewNormal != null) {
-            tvPreviewNormal.setTextColor(applyBrightnessToColor(Color.parseColor("#34C759"), progress));
+            tvPreviewNormal.setTextColor(applyBrightnessToColor(MainActivity.getGlucoseStandardColor(5.5), progress));
         }
         if (tvPreviewHigh != null) {
-            tvPreviewHigh.setTextColor(applyBrightnessToColor(Color.parseColor("#FFD700"), progress));
+            tvPreviewHigh.setTextColor(applyBrightnessToColor(MainActivity.getGlucoseStandardColor(11.4), progress));
         }
         if (tvPreviewIob != null) {
             tvPreviewIob.setTextColor(applyBrightnessToColor(Color.parseColor("#8E8E93"), progress));

@@ -675,15 +675,8 @@ public class MainActivity extends AppCompatActivity {
         
         // Dynamically color-code glucose values separately from clock with custom brightness dimming
         if (lastGlucoseMmol > 0) {
-            if (lastGlucoseMmol < 3.9) {
-                tvGlucose.setTextColor(applyBrightnessToColor(Color.parseColor("#FF0038"), glucoseBrightness)); // Vibrant Ruby Red: Hypoglycemia
-            } else if (lastGlucoseMmol >= 3.9 && lastGlucoseMmol <= 7.8) {
-                tvGlucose.setTextColor(applyBrightnessToColor(Color.parseColor("#34C759"), glucoseBrightness)); // Target Green: Normal range
-            } else if (lastGlucoseMmol > 7.8 && lastGlucoseMmol <= 13.9) {
-                tvGlucose.setTextColor(applyBrightnessToColor(Color.parseColor("#FFD700"), glucoseBrightness)); // Yellow: High glucose
-            } else {
-                tvGlucose.setTextColor(applyBrightnessToColor(Color.parseColor("#FF0038"), glucoseBrightness)); // Vibrant Ruby Red: Severe Hyperglycemia
-            }
+            int baseColor = getGlucoseStandardColor(lastGlucoseMmol);
+            tvGlucose.setTextColor(applyBrightnessToColor(baseColor, glucoseBrightness));
         } else {
             tvGlucose.setTextColor(textColor); // Default color when offline
         }
@@ -701,6 +694,34 @@ public class MainActivity extends AppCompatActivity {
         tvColon.invalidate();
         tvMinutes.invalidate();
         tvGlucose.invalidate();
+    }
+
+    /**
+     * Returns color Int for given glucose value in mmol/L conforming strictly
+     * to the 6-band clinical AGP/TIR standard (from TIRUp):
+     * < 3.0: Very Low / Level 2 Hypo (#EF4444)
+     * 3.0 .. 3.8: Low / Level 1 Hypo (#F59E0B)
+     * 3.9 .. 7.8: Tight Target TITR (#4ADE80)
+     * 7.9 .. 10.0: Target TIR (#10B981)
+     * 10.1 .. 13.9: High / Level 1 Hyper (#F59E0B)
+     * >= 14.0: Very High / Level 2 Hyper (#EF4444)
+     */
+    public static int getGlucoseStandardColor(double valueMmol) {
+        if (valueMmol <= 0.0) {
+            return Color.parseColor("#94A3B8");
+        } else if (valueMmol < 3.0) {
+            return Color.parseColor("#EF4444"); // Very Low (Urgent Red)
+        } else if (valueMmol < 3.9) {
+            return Color.parseColor("#F59E0B"); // Low (Warning Amber)
+        } else if (valueMmol <= 7.8) {
+            return Color.parseColor("#4ADE80"); // Tight Target (Bright Pale Green)
+        } else if (valueMmol <= 10.0) {
+            return Color.parseColor("#10B981"); // Target (Emerald Green)
+        } else if (valueMmol <= 13.9) {
+            return Color.parseColor("#F59E0B"); // High (Warning Amber)
+        } else {
+            return Color.parseColor("#EF4444"); // Very High (Urgent Red)
+        }
     }
 
     private int applyBrightnessToColor(int color, int brightnessPercent) {

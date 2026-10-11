@@ -19,6 +19,15 @@
     <color name="color_danger_red">#FF3B30</color>
     <color name="color_safe_green">#34C759</color>
     
+    <!-- Clinical AGP / TIR Standard Glucose Colors (TIRUp standard) -->
+    <color name="glucose_very_low">#EF4444</color>
+    <color name="glucose_low">#F59E0B</color>
+    <color name="glucose_tight">#4ADE80</color>
+    <color name="glucose_target">#10B981</color>
+    <color name="glucose_high">#F59E0B</color>
+    <color name="glucose_very_high">#EF4444</color>
+    <color name="glucose_stale">#94A3B8</color>
+
     <color name="colorPrimary">#BB86FC</color>
     <color name="colorPrimaryDark">#3700B3</color>
     <color name="colorAccent">#03DAC6</color>
