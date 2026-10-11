@@ -18,3 +18,12 @@
    - Добавлены разрешения `FOREGROUND_SERVICE` и `POST_NOTIFICATIONS`.
 5. **[Completed] Исправление флага `BatteryReceiver`:**
    - Переключен на `Context.RECEIVER_EXPORTED` для системного интента `ACTION_BATTERY_CHANGED` на API 33+, устраняя риск падения на API 34+.
+
+6. **[Completed] Минимизация размера APK (R8, ProGuard, resConfigs):**
+   - Включены `minifyEnabled true`, `shrinkResources true`, `resConfigs "en", "ru"`.
+   - Настроен `app/proguard-rules.pro` с сохранением `com.diaclock.nightstand.**`, Gson и OkHttp 3.12 (полная совместимость с Android 4.4 KitKat / minSdk 19).
+   - Размер релиза сокращен с 5.14 МБ до 1.73 МБ (на 65%).
+7. **[Completed] Масштабирование часов и сахара в альбомном режиме (1.3x):**
+   - В `MainActivity.java` в методах `adjustTextSizes()` и `adjustGlucoseAndIoBTextSizes()` применен множитель `1.3f` для времени, двоеточия, сахара и IoB в ландшафтном режиме.
+8. **[Completed] Релизная сборка и проверка:**
+   - Собран релиз `DiaNight-v1.1.79-release.apk` (1.73 МБ), проверен single-dex и ресурсы.

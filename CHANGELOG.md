@@ -1,5 +1,18 @@
 # Changelog
 
+## [v1.1.79] - 2026-10-11
+
+### Added
+- **R8 ProGuard / APK Size Optimization**:
+  - Enabled R8 minification (`minifyEnabled true`) and resource shrinking (`shrinkResources true`) in `build.gradle`.
+  - Created strict `proguard-rules.pro` keeping all application classes (`com.diaclock.nightstand.**`), Gson serialization, and OkHttp 3.12 reflection mechanisms to guarantee 100% backward compatibility down to Android 4.4 KitKat (`minSdk 19`).
+  - Added `resConfigs "en", "ru"` to strip unused Material Design localizations across 80+ unused languages.
+  - Reduced release APK size from 5.14 MB to 1.73 MB (65% reduction) with a lightweight single-dex payload for faster loading and minimal RAM footprint on legacy devices.
+
+### Changed
+- **Landscape Screen Scaling (1.3x)**:
+  - Scaled clock digits (HH:mm), colon separator margin, glucose value, and IoB indicators up by 1.3x in landscape orientation (`Configuration.ORIENTATION_LANDSCAPE` / wide displays) for enhanced nighttime readability from a nightstand distance.
+
 ## [v1.1.78] - 2026-10-11
 
 ### Changed

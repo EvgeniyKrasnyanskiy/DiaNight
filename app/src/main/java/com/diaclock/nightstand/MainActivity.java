@@ -1547,8 +1547,13 @@ public class MainActivity extends AppCompatActivity {
             // Safe bounds for the scaling factor to avoid extreme micro/macro scales
             if (scale < 0.55f) scale = 0.55f;
             if (scale > 1.25f) scale = 1.25f;
+
+            // In landscape orientation, scale up clock and sugar by 1.3x
+            boolean isLandscape = getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                    || metrics.widthPixels > metrics.heightPixels;
+            float orientationMultiplier = isLandscape ? 1.3f : 1.0f;
             
-            int timeTextSize = (int) (180 * scale);
+            int timeTextSize = (int) (180 * scale * orientationMultiplier);
             
             tvHours.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, timeTextSize);
             tvColon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, timeTextSize);
@@ -1558,11 +1563,11 @@ public class MainActivity extends AppCompatActivity {
             // to keep it vertically centered with the giant digits.
             if (tvColon.getLayoutParams() instanceof android.widget.LinearLayout.LayoutParams) {
                 android.widget.LinearLayout.LayoutParams lp = (android.widget.LinearLayout.LayoutParams) tvColon.getLayoutParams();
-                lp.bottomMargin = (int) (20 * scale * metrics.density);
+                lp.bottomMargin = (int) (20 * scale * orientationMultiplier * metrics.density);
                 tvColon.setLayoutParams(lp);
             }
             
-            Log.d(TAG, "Clock text scaling applied: widthDp=" + widthDp + ", scale=" + scale + ", timeSp=" + timeTextSize);
+            Log.d(TAG, "Clock text scaling applied: widthDp=" + widthDp + ", scale=" + scale + ", orientationMult=" + orientationMultiplier + ", timeSp=" + timeTextSize);
             
             // Dynamically scale glucose and IoB based on screen sizes and actual content
             adjustGlucoseAndIoBTextSizes();
@@ -1586,6 +1591,11 @@ public class MainActivity extends AppCompatActivity {
             // Safe bounds for the scaling factor to avoid extreme micro/macro scales
             if (scale < 0.55f) scale = 0.55f;
             if (scale > 1.25f) scale = 1.25f;
+
+            // In landscape orientation, scale up clock and sugar by 1.3x
+            boolean isLandscape = getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                    || metrics.widthPixels > metrics.heightPixels;
+            float orientationMultiplier = isLandscape ? 1.3f : 1.0f;
             
             String glucoseText = tvGlucose.getText() != null ? tvGlucose.getText().toString() : "";
             boolean isIoBVisible = tvIoB.getVisibility() == View.VISIBLE;
@@ -1610,14 +1620,15 @@ public class MainActivity extends AppCompatActivity {
                 lengthFactor *= 0.95f; // Extra 5% reduction
             }
             
-            int glucoseTextSize = (int) (160 * scale * lengthFactor);
-            int iobTextSize = (int) (48 * scale * lengthFactor);
+            int glucoseTextSize = (int) (160 * scale * lengthFactor * orientationMultiplier);
+            int iobTextSize = (int) (48 * scale * lengthFactor * orientationMultiplier);
             
             tvGlucose.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, glucoseTextSize);
             tvIoB.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, iobTextSize);
             
             Log.d(TAG, "Dynamic glucose/iob text scaling applied: widthDp=" + widthDp + ", baseScale=" + scale 
-                + ", lengthFactor=" + lengthFactor + ", glucoseSp=" + glucoseTextSize + ", iobSp=" + iobTextSize);
+                + ", orientationMult=" + orientationMultiplier + ", lengthFactor=" + lengthFactor 
+                + ", glucoseSp=" + glucoseTextSize + ", iobSp=" + iobTextSize);
         } catch (Exception e) {
             Log.e(TAG, "Error adjusting glucose/iob text sizes: " + e.getMessage());
         }

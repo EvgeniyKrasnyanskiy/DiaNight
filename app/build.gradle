@@ -51,13 +51,15 @@ android {
         targetSdk 33
         versionCode code
         versionName "1.1." + build
+        resConfigs "en", "ru"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             if (rootProject.file('dianight.jks').exists() && localProperties.containsKey('RELEASE_STORE_PASSWORD')) {
                 signingConfig signingConfigs.release
