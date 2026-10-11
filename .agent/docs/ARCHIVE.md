@@ -75,3 +75,38 @@
 4. `cda6fbf` — `feat: add WifiLock high-performance keepalive, WiFi watchdog reconnect option, and update help manual`
 5. `ddececf` — `fix: resolve GitHub API 403 rate limit with fallback and hide soft keyboard on settings launch`
 6. `2822963` — `docs: mark all tasks as completed for v1.1.77`
+
+## Сессия 11 Октября 2026 [Completed]
+
+### 1. Реализованные фичи и улучшения:
+- **Международный клинический стандарт цветов глюкозы (AGP / TIR):**
+  - Приведение к стандарту консенсуса *Battelino et al., 2019* (по проекту `TIRUp`):
+    - `< 3.0`: `#EF4444` (Very Low / Urgent Red)
+    - `3.0 .. 3.8`: `#F59E0B` (Low / Warning Amber)
+    - `3.9 .. 7.8`: `#4ADE80` (Tight Target / Bright Pale Green)
+    - `7.9 .. 10.0`: `#10B981` (Target / Emerald Green)
+    - `10.1 .. 13.9`: `#F59E0B` (High / Warning Amber)
+    - `>= 14.0`: `#EF4444` (Very High / Urgent Red)
+    - Оффлайн / нет данных: `#94A3B8` (серый)
+  - Реализован централизованный метод `MainActivity.getGlucoseStandardColor(double valueMmol)`.
+  - Обновлён интерактивный предпросмотр диммера яркости в `SettingsActivity` и `activity_settings.xml`.
+- **Комплексный технический аудит проекта:**
+  - Создан отчёт [.agent/docs/AUDIT_REPORT.md](file:///H:/Diabetes/DiaNight/.agent/docs/AUDIT_REPORT.md).
+- **Служба Foreground Service (`NightMonitorService`):**
+  - Реализована постоянная фоновая служба с тихим уведомлением (`IMPORTANCE_LOW`), переводящая процесс в статус `FOREGROUND`. Это исключает убийство приложения ночного мониторинга системой при нехватке памяти (Low Memory Killer).
+  - Добавлены разрешения `FOREGROUND_SERVICE` и `POST_NOTIFICATIONS` в манифест.
+- **Исправление тихого автопоиска подсети без API Secret:**
+  - Устранена блокировка поиска при пустом пароле. Теперь автопоиск работает для открытых локальных серверов xDrip+.
+- **Надёжная светодиодная вспышка при тревоге (Hardware Torch):**
+  - Добавлен метод `getFlashCameraId()` с проверкой `CameraCharacteristics.FLASH_INFO_AVAILABLE` и приоритетом задней камеры.
+- **Безопасность системных ресиверов:**
+  - Переключен `batteryReceiver` на `Context.RECEIVER_EXPORTED` на API 33+ против сбоев `SecurityException` на Android 14+.
+
+### 2. Сборка и Релизы:
+- Скомпилирован и подписан релизный APK: `DiaNight-v1.1.78-release.apk` (`versionCode 80`, `versionName 1.1.78`).
+- Опубликован официальный релиз на GitHub: `v1.1.78` (`https://github.com/EvgeniyKrasnyanskiy/DiaNight/releases/tag/v1.1.78`).
+
+### 3. Коммиты сессии:
+1. `7b131e3` — `feat: align glucose colors with international AGP/TIR standard from TIRUp`
+2. `0c113a7` — `feat: implement NightMonitorService and resolve audit critical vulnerabilities`
+3. `ebdf343` — `chore(release): bump version to 1.1.78`
