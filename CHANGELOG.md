@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] - 2026-10-11
+## [v1.1.78] - 2026-10-11
 
 ### Changed
 - **International AGP/TIR Glucose Color Standard**:
