@@ -164,4 +164,10 @@
     <string name="sound_silent_option">Silent 🔕</string>
     <string name="label_glucose_brightness">Glucose &amp; IoB Color Brightness</string>
     <string name="hint_glucose_brightness">Adjust brightness for comfortable night sleep</string>
+
+    <!-- Foreground Monitoring Service Strings -->
+    <string name="notification_channel_name">DiaNight Monitoring</string>
+    <string name="notification_channel_desc">Continuous night glucose monitoring service</string>
+    <string name="notification_service_title">DiaNight Active</string>
+    <string name="notification_service_text">Night glucose monitoring &amp; alarms active</string>
 </resources>

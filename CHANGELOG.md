@@ -14,3 +14,17 @@
   - Added unified glucose color definitions (`glucose_very_low`, `glucose_low`, `glucose_tight`, `glucose_target`, `glucose_high`, `glucose_very_high`, `glucose_stale`) to `colors.xml`.
   - Created centralized static method `MainActivity.getGlucoseStandardColor(valueMmol)` with brightness scaling support.
   - Updated glucose brightness preview in `SettingsActivity` and `activity_settings.xml`.
+
+### Added
+- **NightMonitorService (Foreground Service)**:
+  - Added foreground service keeping app in high-priority state to prevent Android Low Memory Killer (LMK) from terminating overnight monitoring.
+  - Added persistent low-priority notification with quick tap access back to MainActivity.
+  - Added `FOREGROUND_SERVICE` and `POST_NOTIFICATIONS` permissions.
+
+### Fixed
+- **Subnet Auto-Discovery Without API Secret**:
+  - Removed check requiring non-empty API Secret, allowing automatic discovery of unauthenticated local xDrip+ master servers.
+- **Hardware Torch / Flashlight Camera Selection**:
+  - Added `FLASH_INFO_AVAILABLE` check with preference for rear-facing camera to ensure torch works reliably across multi-camera devices.
+- **Battery Receiver Export Flag**:
+  - Set `RECEIVER_EXPORTED` for `ACTION_BATTERY_CHANGED` on API 33+ to prevent future `SecurityException` crashes.

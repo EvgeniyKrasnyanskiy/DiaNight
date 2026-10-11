@@ -170,14 +170,47 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    private String torchCameraId = null;
+
+    private String getFlashCameraId(android.hardware.camera2.CameraManager cameraManager) {
+        if (cameraManager == null) return null;
+        try {
+            String[] ids = cameraManager.getCameraIdList();
+            if (ids == null) return null;
+            // 1. Prefer back-facing camera with flash
+            for (String id : ids) {
+                android.hardware.camera2.CameraCharacteristics chars = cameraManager.getCameraCharacteristics(id);
+                Boolean hasFlash = chars.get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                Integer facing = chars.get(android.hardware.camera2.CameraCharacteristics.LENS_FACING);
+                if (Boolean.TRUE.equals(hasFlash) && facing != null &&
+                        facing == android.hardware.camera2.CameraCharacteristics.LENS_FACING_BACK) {
+                    return id;
+                }
+            }
+            // 2. Fallback to any camera with flash
+            for (String id : ids) {
+                android.hardware.camera2.CameraCharacteristics chars = cameraManager.getCameraCharacteristics(id);
+                Boolean hasFlash = chars.get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                if (Boolean.TRUE.equals(hasFlash)) {
+                    return id;
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error resolving flash camera ID: " + e.getMessage());
+        }
+        return null;
+    }
+
     private void setHardwareTorchMode(boolean on) {
         try {
             if (android.os.Build.VERSION.SDK_INT >= 23) {
                 android.hardware.camera2.CameraManager cameraManager = (android.hardware.camera2.CameraManager) getSystemService(Context.CAMERA_SERVICE);
                 if (cameraManager != null) {
-                    String[] ids = cameraManager.getCameraIdList();
-                    if (ids != null && ids.length > 0) {
-                        cameraManager.setTorchMode(ids[0], on);
+                    if (torchCameraId == null) {
+                        torchCameraId = getFlashCameraId(cameraManager);
+                    }
+                    if (torchCameraId != null) {
+                        cameraManager.setTorchMode(torchCameraId, on);
                     }
                 }
             } else {
@@ -315,6 +348,9 @@ public class MainActivity extends AppCompatActivity {
         // Track installation analytics
         TelemetryTracker.trackInstall(this);
 
+        // Start foreground monitoring service to protect against LMK termination
+        NightMonitorService.start(this);
+
         // Start tasks
         startTimeUpdates();
         startToggleCycle();
@@ -445,6 +481,9 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
+        // Ensure foreground monitoring service is active
+        NightMonitorService.start(this);
+
         // Refresh inactivity timer on resume
         adjustTextSizes();
         resetUserInactivityTimer();
@@ -506,6 +545,9 @@ public class MainActivity extends AppCompatActivity {
         // Clean up OkHttp resources
         HttpClientProvider.getClient().dispatcher().cancelAll();
 
+        // Stop foreground monitoring service
+        NightMonitorService.stop(this);
+
         // Clean up handlers
         pixelShiftHandler.removeCallbacksAndMessages(null);
         inactivityHandler.removeCallbacksAndMessages(null);
@@ -515,7 +557,7 @@ public class MainActivity extends AppCompatActivity {
         if (!isBatteryReceiverRegistered) {
             IntentFilter filter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
             if (android.os.Build.VERSION.SDK_INT >= 33) {
-                registerReceiver(batteryReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+                registerReceiver(batteryReceiver, filter, Context.RECEIVER_EXPORTED);
             } else {
                 registerReceiver(batteryReceiver, filter);
             }
@@ -1722,7 +1764,6 @@ public class MainActivity extends AppCompatActivity {
 
         final String currentIp = serverIp != null ? serverIp.trim() : "";
         final String secret = cachedSecretHash;
-        if (secret == null || secret.isEmpty()) return;
 
         isAutoScanningSubnet = true;
         Log.i(TAG, "Consecutive network failures >= 3. Triggering silent background subnet discovery...");
@@ -1758,7 +1799,11 @@ public class MainActivity extends AppCompatActivity {
                         if (found.get() || Thread.currentThread().isInterrupted()) return;
                         try {
                             String checkUrl = "http://" + targetIp + ":17580/sgv.json";
-                            Request req = new Request.Builder().url(checkUrl).addHeader("api-secret", secret).build();
+                            Request.Builder reqBuilder = new Request.Builder().url(checkUrl);
+                            if (secret != null && !secret.isEmpty()) {
+                                reqBuilder.addHeader("api-secret", secret);
+                            }
+                            Request req = reqBuilder.build();
                             try (Response resp = finalScanClient.newCall(req).execute()) {
                                 if (resp.isSuccessful() || resp.code() == 401) {
                                     if (found.compareAndSet(false, true)) {

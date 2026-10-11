@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
@@ -45,6 +47,12 @@
             android:theme="@style/Theme.DiaClock.Settings"
             android:windowSoftInputMode="stateHidden|adjustResize"
             android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- Foreground Monitoring Service preventing OOM killing -->
+        <service
+            android:name=".NightMonitorService"
+            android:enabled="true"
+            android:exported="false" />
 
         <!-- AppCompat Locale Auto-Store Service -->
         <service

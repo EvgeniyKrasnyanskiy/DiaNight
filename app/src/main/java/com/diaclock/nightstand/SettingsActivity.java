@@ -922,16 +922,6 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void startNetworkAutoDiscovery() {
-        String secretKey = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
-        if (secretKey.isEmpty()) {
-            new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                    .setTitle(getString(R.string.dialog_api_secret_required_title))
-                    .setMessage(getString(R.string.dialog_api_secret_required_msg))
-                    .setPositiveButton(getString(R.string.btn_ok), null)
-                    .show();
-            return;
-        }
-
         String basePrefix = "";
         
         // 1. Preferential Subnet: Extract from the current IP field if available

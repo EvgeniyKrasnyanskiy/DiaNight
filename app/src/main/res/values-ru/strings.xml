@@ -163,4 +163,10 @@
     <string name="sound_silent_option">Без звука 🔕</string>
     <string name="label_glucose_brightness">Яркость цвета сахара и IoB</string>
     <string name="hint_glucose_brightness">Настройте яркость для комфортного сна в темноте</string>
+
+    <!-- Foreground Monitoring Service Strings -->
+    <string name="notification_channel_name">DiaNight Мониторинг</string>
+    <string name="notification_channel_desc">Служба непрерывного ночного мониторинга сахара</string>
+    <string name="notification_service_title">DiaNight активен</string>
+    <string name="notification_service_text">Ночной мониторинг глюкозы и тревоги запущены</string>
 </resources>
