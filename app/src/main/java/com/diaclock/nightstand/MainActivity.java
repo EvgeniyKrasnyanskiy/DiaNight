@@ -81,6 +81,24 @@ public class MainActivity extends AppCompatActivity {
     private boolean isFlashlightActive = false;
     private ValueAnimator flashlightBrightnessAnimator;
     private android.view.GestureDetector gestureDetector;
+
+    // Screen Brightness & Vertical Swipe Dimmer UI
+    private static final String PREF_SCREEN_BRIGHTNESS = "screen_brightness_percent";
+    private View layoutBrightnessHud;
+    private TextView tvBrightnessHudValue;
+    private final Handler brightnessHudHandler = new Handler(Looper.getMainLooper());
+    private final Runnable hideBrightnessHudRunnable = () -> {
+        if (layoutBrightnessHud != null && !isActivityDestroyed) {
+            layoutBrightnessHud.animate().alpha(0.0f).setDuration(350).withEndAction(() -> {
+                if (layoutBrightnessHud != null) layoutBrightnessHud.setVisibility(View.GONE);
+            }).start();
+        }
+    };
+    private float currentScreenBrightness = -1.0f;
+    private float touchStartX = 0f;
+    private float touchStartY = 0f;
+    private boolean isVerticalSwipe = false;
+    private float initialSwipeBrightness = 0.5f;
     
     private boolean isControlsFaded = false;
     private final Runnable inactivityRunnable = this::fadeAttributesOut;
@@ -524,6 +542,7 @@ public class MainActivity extends AppCompatActivity {
         stopAlarmSound();
         releaseWifiLock();
         mainHandler.removeCallbacksAndMessages(null);
+        brightnessHudHandler.removeCallbacksAndMessages(null);
 
         if (flashlightBrightnessAnimator != null) {
             flashlightBrightnessAnimator.cancel();
@@ -601,6 +620,8 @@ public class MainActivity extends AppCompatActivity {
         statusBarContainer = findViewById(R.id.statusBarContainer);
 
         viewFlashlightOverlay = findViewById(R.id.viewFlashlightOverlay);
+        layoutBrightnessHud = findViewById(R.id.layoutBrightnessHud);
+        tvBrightnessHudValue = findViewById(R.id.tvBrightnessHudValue);
     }
 
     private void loadSettings() {
@@ -618,6 +639,11 @@ public class MainActivity extends AppCompatActivity {
         disableAutoScan = prefs.getBoolean("disable_auto_scan", false);
         wifiWatchdogEnabled = prefs.getBoolean("wifi_watchdog", false);
         glucoseBrightness = prefs.getInt("glucose_brightness", 80);
+
+        int savedBrightnessPercent = prefs.getInt(PREF_SCREEN_BRIGHTNESS, -1);
+        if (savedBrightnessPercent >= 1 && savedBrightnessPercent <= 100) {
+            applyScreenBrightness(savedBrightnessPercent / 100.0f);
+        }
         
         alarmSoundType = prefs.getString("alarm_sound_type", null);
         alarmUriStr = prefs.getString("alarm_uri", null);
@@ -1548,12 +1574,17 @@ public class MainActivity extends AppCompatActivity {
             if (scale < 0.55f) scale = 0.55f;
             if (scale > 1.25f) scale = 1.25f;
 
-            // In landscape orientation, scale up clock and sugar by 1.3x
+            // In landscape orientation, scale up clock and sugar by 1.495x (1.3x * 1.15x)
             boolean isLandscape = getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
                     || metrics.widthPixels > metrics.heightPixels;
-            float orientationMultiplier = isLandscape ? 1.3f : 1.0f;
+            float orientationMultiplier = isLandscape ? 1.495f : 1.0f;
             
             int timeTextSize = (int) (180 * scale * orientationMultiplier);
+            // Safety boundary: ensure margin clearance for pixelShiftRunnable (+-16px) on narrow screens
+            int maxSafeTimeSp = (int) ((widthDp - 48) / 2.75f);
+            if (timeTextSize > maxSafeTimeSp) {
+                timeTextSize = maxSafeTimeSp;
+            }
             
             tvHours.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, timeTextSize);
             tvColon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, timeTextSize);
@@ -1592,10 +1623,10 @@ public class MainActivity extends AppCompatActivity {
             if (scale < 0.55f) scale = 0.55f;
             if (scale > 1.25f) scale = 1.25f;
 
-            // In landscape orientation, scale up clock and sugar by 1.3x
+            // In landscape orientation, scale up clock and sugar by 1.495x (1.3x * 1.15x)
             boolean isLandscape = getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
                     || metrics.widthPixels > metrics.heightPixels;
-            float orientationMultiplier = isLandscape ? 1.3f : 1.0f;
+            float orientationMultiplier = isLandscape ? 1.495f : 1.0f;
             
             String glucoseText = tvGlucose.getText() != null ? tvGlucose.getText().toString() : "";
             boolean isIoBVisible = tvIoB.getVisibility() == View.VISIBLE;
@@ -1623,6 +1654,12 @@ public class MainActivity extends AppCompatActivity {
             int glucoseTextSize = (int) (160 * scale * lengthFactor * orientationMultiplier);
             int iobTextSize = (int) (48 * scale * lengthFactor * orientationMultiplier);
             
+            // Safety boundary: ensure margin clearance for pixelShiftRunnable (+-16px) on narrow screens
+            int maxSafeGlucoseSp = (int) ((widthDp - 48) / 2.85f);
+            if (glucoseTextSize > maxSafeGlucoseSp) {
+                glucoseTextSize = maxSafeGlucoseSp;
+            }
+            
             tvGlucose.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, glucoseTextSize);
             tvIoB.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, iobTextSize);
             
@@ -1638,6 +1675,28 @@ public class MainActivity extends AppCompatActivity {
     public void onConfigurationChanged(@NonNull android.content.res.Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         adjustTextSizes();
+    }
+
+    private void applyScreenBrightness(float brightness) {
+        if (isActivityDestroyed) return;
+        currentScreenBrightness = Math.max(0.01f, Math.min(1.0f, brightness));
+        android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+        lp.screenBrightness = currentScreenBrightness;
+        getWindow().setAttributes(lp);
+    }
+
+    private void showBrightnessHud(int percent) {
+        if (layoutBrightnessHud == null || isActivityDestroyed) return;
+        brightnessHudHandler.removeCallbacks(hideBrightnessHudRunnable);
+        if (tvBrightnessHudValue != null) {
+            tvBrightnessHudValue.setText(percent + "%");
+        }
+        if (layoutBrightnessHud.getVisibility() != View.VISIBLE) {
+            layoutBrightnessHud.setAlpha(0.0f);
+            layoutBrightnessHud.setVisibility(View.VISIBLE);
+            layoutBrightnessHud.animate().alpha(1.0f).setDuration(150).start();
+        }
+        brightnessHudHandler.postDelayed(hideBrightnessHudRunnable, 1000L);
     }
 
     private void initFlashlight() {
@@ -1661,10 +1720,56 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Set touch listener on root layout to detect double-tap on empty areas
+        // Set touch listener on root layout to support vertical swipe brightness and tap gestures
         mainRootLayout.setOnTouchListener((v, event) -> {
-            gestureDetector.onTouchEvent(event);
-            return true;
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    touchStartX = event.getRawX();
+                    touchStartY = event.getRawY();
+                    isVerticalSwipe = false;
+                    android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+                    initialSwipeBrightness = (lp.screenBrightness >= 0.01f) ? lp.screenBrightness : (currentScreenBrightness >= 0.01f ? currentScreenBrightness : 0.5f);
+                    break;
+
+                case MotionEvent.ACTION_MOVE:
+                    float deltaY = touchStartY - event.getRawY(); // dragging UP increases, DOWN decreases
+                    float deltaX = event.getRawX() - touchStartX;
+                    
+                    if (!isVerticalSwipe) {
+                        float absDeltaY = Math.abs(deltaY);
+                        float absDeltaX = Math.abs(deltaX);
+                        int touchSlop = android.view.ViewConfiguration.get(this).getScaledTouchSlop();
+                        if (absDeltaY > touchSlop * 1.5f && absDeltaY > absDeltaX * 1.25f) {
+                            isVerticalSwipe = true;
+                        }
+                    }
+
+                    if (isVerticalSwipe) {
+                        android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+                        float screenHeight = Math.max(1, dm.heightPixels);
+                        // Full vertical screen drag spans 1.0 (100%) brightness range
+                        float targetBrightness = initialSwipeBrightness + (deltaY / screenHeight);
+                        targetBrightness = Math.max(0.01f, Math.min(1.0f, targetBrightness));
+                        applyScreenBrightness(targetBrightness);
+                        showBrightnessHud(Math.round(targetBrightness * 100));
+                        return true;
+                    }
+                    break;
+
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    if (isVerticalSwipe) {
+                        isVerticalSwipe = false;
+                        int percent = Math.round(currentScreenBrightness * 100);
+                        SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
+                        editor.putInt(PREF_SCREEN_BRIGHTNESS, percent);
+                        editor.apply();
+                        return true;
+                    }
+                    break;
+            }
+
+            return gestureDetector.onTouchEvent(event);
         });
 
         // Set touch listener on the white overlay so we can double-tap to turn it off
@@ -1705,7 +1810,7 @@ public class MainActivity extends AppCompatActivity {
                 viewFlashlightOverlay.setVisibility(View.GONE);
             }).start();
 
-            // Smoothly animate screen brightness down to minimal, then restore default
+            // Smoothly animate screen brightness down to minimal, then restore chosen brightness
             flashlightBrightnessAnimator = ValueAnimator.ofFloat(1.0f, 0.1f);
             flashlightBrightnessAnimator.setDuration(750);
             flashlightBrightnessAnimator.addUpdateListener(animation -> {
@@ -1719,7 +1824,7 @@ public class MainActivity extends AppCompatActivity {
                 public void onAnimationEnd(android.animation.Animator animation) {
                     if (isActivityDestroyed) return;
                     android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
-                    lp.screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE; // restore default
+                    lp.screenBrightness = (currentScreenBrightness >= 0.01f) ? currentScreenBrightness : android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
                     getWindow().setAttributes(lp);
                 }
             });

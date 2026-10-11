@@ -1,5 +1,21 @@
 # Changelog
 
+## [v1.1.80] - 2026-10-11
+
+### Added
+- **Screen Brightness Swipe Control & HUD**:
+  - Implemented vertical swipe gesture across the screen: dragging down dims the screen smoothly down to 1% (ideal for nighttime sleeping without glare), dragging up brightens up to 100%.
+  - Added floating HUD indicator pill with sun icon and real-time percentage (`layoutBrightnessHud`, `ic_sun.xml`, `bg_brightness_hud.xml`), automatically fading out after 1 second.
+  - Custom brightness level is saved to `SharedPreferences` and restored on app launch.
+  - Preserved gesture separation: single tap (snooze alarm) and double tap (flashlight toggle) remain fully operational without false triggers.
+- **Project Roadmap (`ROADMAP.md`)**:
+  - Documented strategic improvement paths in `.agent/docs/ROADMAP.md`: predictive hypo alarms, night/day threshold profiles, deep red/amber OLED sleep mode, proximity sensor dimming, and flip-to-snooze.
+
+### Changed
+- **Enhanced Landscape Scaling (1.495x)**:
+  - Increased clock, colon margin, glucose, and IoB sizes by an additional 1.15x (multiplier `1.495f` relative to base) for superior readability from a nightstand distance.
+  - Added safety margins preventing glyph clipping against display edges during OLED burn-in pixel shifts (`±16px`) on compact screens.
+
 ## [v1.1.79] - 2026-10-11
 
 ### Added
