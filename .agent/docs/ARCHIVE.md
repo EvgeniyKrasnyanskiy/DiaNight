@@ -101,12 +101,32 @@
   - Добавлен метод `getFlashCameraId()` с проверкой `CameraCharacteristics.FLASH_INFO_AVAILABLE` и приоритетом задней камеры.
 - **Безопасность системных ресиверов:**
   - Переключен `batteryReceiver` на `Context.RECEIVER_EXPORTED` на API 33+ против сбоев `SecurityException` на Android 14+.
+- **Минимизация размера APK (R8, ProGuard, resConfigs):**
+  - Размер APK сокращён на 65% — **с 5.14 МБ до 1.73 МБ** (экономия >3.4 МБ).
+  - Создан файл `app/proguard-rules.pro` со строгим сохранением классов `com.diaclock.nightstand.**`, сериализации `Gson` и стека `OkHttp 3.12.13`, обеспечивающий 100% стабильность на старых смартфонах (**Android 4.4 KitKat / minSdk 19**).
+  - Добавлен фильтр локалей `resConfigs "en", "ru"`, удаливший неиспользуемые таблицы переводов Material Design на 80+ языках (`resources.arsc` уменьшился с 1.07 МБ до 459 КБ).
+  - Компактный `classes.dex` сократился с 9.06 МБ до 1.88 МБ (единый Single-DEX без оверхеда Dalvik, быстрый холодный старт и минимальное потребление RAM).
+- **Масштабирование в альбомном режиме (до 1.495x / ~1.5x от базы):**
+  - Увеличены цифры времени (со 180 до 215sp на 640dp), отступ двоеточия, сахар (со 160 до 191sp) и IoB (с 48 до 57sp) для комфортной читаемости с прикроватной тумбочки.
+  - Добавлены ограничители безопасных полей экрана (`maxSafeTimeSp`, `maxSafeGlucoseSp`) для гарантии безопасных отступов при циклическом смещении защиты OLED от выгорания (`pixelShiftRunnable`, ±16 пикселей каждые 2 минуты).
+- **Регулировка яркости свайпом по экрану и всплывающий HUD:**
+  - Вертикальный свайп по экрану: вниз — плавное диммирование до 1% (ультра-тёмный ночной режим), вверх — увеличение до 100%.
+  - Всплывающий индикатор `layoutBrightnessHud` с иконкой солнца и процентами (`🔆 XX%`), автоматически затухающий через 1 секунду.
+  - Автоматическое сохранение уровня яркости в `SharedPreferences` (`screen_brightness_percent`) и восстановление при перезапуске.
+  - Разделение жестов: одиночный тап (snooze будильника) и двойной тап (фонарик) работают чётко без ложных срабатываний.
+- **Дорожная карта развития проекта ([ROADMAP.md](file:///h:/Diabetes/DiaNight/.agent/docs/ROADMAP.md)):**
+  - Разработан и зафиксирован стратегический документ с ключевыми векторами развития: предиктивное предупреждение гипогликемии, профили порогов день/ночь, монохромный глубокий красный ночной OLED-режим, пробуждение/затухание по датчику приближения, Flip-to-Snooze и прямое BLE-подключение.
 
 ### 2. Сборка и Релизы:
-- Скомпилирован и подписан релизный APK: `DiaNight-v1.1.78-release.apk` (`versionCode 80`, `versionName 1.1.78`).
-- Опубликован официальный релиз на GitHub: `v1.1.78` (`https://github.com/EvgeniyKrasnyanskiy/DiaNight/releases/tag/v1.1.78`).
+- **v1.1.78:** Скомпилирован и подписан `DiaNight-v1.1.78-release.apk` (5.14 МБ, `versionCode 80`, `versionName 1.1.78`). Опубликован официальный релиз на GitHub: `https://github.com/EvgeniyKrasnyanskiy/DiaNight/releases/tag/v1.1.78`.
+- **v1.1.79:** Скомпилирован и подписан `DiaNight-v1.1.79-release.apk` (1.73 МБ, `versionCode 81`, `versionName 1.1.79`). Опубликован релиз с оптимизацией размера R8 и масштабом 1.3x: `https://github.com/EvgeniyKrasnyanskiy/DiaNight/releases/tag/v1.1.79`.
+- **v1.1.80:** Скомпилирован и подписан `DiaNight-v1.1.80-release.apk` (1.73 МБ, `versionCode 82`, `versionName 1.1.80`). Опубликован релиз со свайпом яркости, HUD, масштабом 1.495x и роадмапом: `https://github.com/EvgeniyKrasnyanskiy/DiaNight/releases/tag/v1.1.80`.
+- Успешно протестировано и установлено через ADB на физическом устройстве Alcatel One Touch Idol 2 (модель `6037Y`, **Android 4.4.2 KitKat**).
 
 ### 3. Коммиты сессии:
 1. `7b131e3` — `feat: align glucose colors with international AGP/TIR standard from TIRUp`
 2. `0c113a7` — `feat: implement NightMonitorService and resolve audit critical vulnerabilities`
 3. `ebdf343` — `chore(release): bump version to 1.1.78`
+4. `567e837` — `docs: update ARCHIVE.md with release v1.1.78 details`
+5. `df7d62e` — `feat: optimize APK size via R8 and scale landscape fonts by 1.3x (v1.1.79)`
+6. `a516e53` — `feat: add swipe brightness control with HUD, 1.495x landscape scaling, and project roadmap (v1.1.80)`
