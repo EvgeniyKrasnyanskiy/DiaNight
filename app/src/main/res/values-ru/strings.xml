@@ -169,4 +169,25 @@
     <string name="notification_channel_desc">Служба непрерывного ночного мониторинга сахара</string>
     <string name="notification_service_title">DiaNight активен</string>
     <string name="notification_service_text">Ночной мониторинг глюкозы и тревоги запущены</string>
+
+    <!-- Multi-source Priority, Nightscout, Polling & Auto-save Strings -->
+    <string name="label_source_broadcast_priority">1. Локальный Broadcast (xDrip+ на этом телефоне)</string>
+    <string name="label_source_nightscout_priority">2. Nightscout (облачный сервер)</string>
+    <string name="label_source_wifi_priority">3. Wi-Fi (веб-сервер xDrip+ на мастере)</string>
+    <string name="hint_source_priority">Приоритет опроса: Broadcast → Nightscout → Wi-Fi. Следующий источник опрашивается только если с предыдущего нет свежих данных — это экономит батарею мастера.</string>
+    <string name="label_poll_interval">Интервал опроса (сек)</string>
+    <string name="label_stale_threshold">Порог устаревания (мин)</string>
+    <string name="label_nightscout_config">Настройка Nightscout</string>
+    <string name="label_nightscout_url">URL Nightscout (например, https://my.ns.org)</string>
+    <string name="label_nightscout_secret">API Secret Nightscout (необязательно)</string>
+    <string name="btn_test_nightscout">Проверить связь с Nightscout</string>
+    <string name="hint_autosave_enabled">Все настройки сохраняются автоматически при изменении</string>
+    <string name="msg_at_least_one_source">Должен быть выбран хотя бы один источник данных</string>
+    <string name="msg_invalid_nightscout_url">Пожалуйста, введите корректный URL Nightscout</string>
+    <string name="msg_invalid_poll_interval">Интервал опроса должен быть не менее 15 секунд</string>
+    <string name="msg_invalid_stale_threshold">Порог устаревания должен быть не менее 1 минуты</string>
+    <string name="dialog_test_nightscout_msg">Подключение к Nightscout: %1$s...</string>
+    <string name="dialog_test_nightscout_success_msg">Связь с Nightscout успешно установлена!\n\nКод ответа: 200 OK</string>
+    <string name="dialog_test_nightscout_auth_msg">Nightscout отклонил запрос (401/403).\n\nПроверьте API Secret или токен доступа (?token=...).</string>
+    <string name="dialog_test_nightscout_error_msg">Не удалось подключиться к Nightscout:\n%1$s\n\nДетали ошибки:\n%2$s</string>
 </resources>

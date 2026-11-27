@@ -36,6 +36,22 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"/>
 
+        <!-- Active Data Source Indicator Badge (Top-Left, next to Settings) -->
+        <TextView
+            android:id="@+id/tvDataSourceBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:text=""
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_secondary"
+            android:alpha="0.75"
+            android:visibility="gone"
+            app:layout_constraintStart_toEndOf="@id/ivSettings"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
         <!-- Battery Status Container (Top-Right, left of network warning/alarm bell) -->
         <LinearLayout
             android:id="@+id/ivBatteryContainer"

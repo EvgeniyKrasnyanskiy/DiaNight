@@ -31,10 +31,11 @@ import okhttp3.Callback;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.widget.AdapterView;
 import android.widget.CheckBox;
 import android.widget.EditText;
-import android.widget.RadioGroup;
-import android.widget.RadioButton;
 import android.widget.Spinner;
 import android.widget.ArrayAdapter;
 import androidx.core.os.LocaleListCompat;
@@ -49,6 +50,10 @@ public class SettingsActivity extends AppCompatActivity {
 
     private TextInputEditText etIpAddress;
     private TextInputEditText etApiSecret;
+    private TextInputEditText etNightscoutUrl;
+    private TextInputEditText etNightscoutSecret;
+    private TextInputEditText etPollInterval;
+    private TextInputEditText etStaleThreshold;
     private TextInputEditText etToggleInterval;
     private TextInputEditText etDayStart;
     private TextInputEditText etDayEnd;
@@ -57,8 +62,9 @@ public class SettingsActivity extends AppCompatActivity {
     private TextInputEditText etNightLow;
     private TextInputEditText etNightHigh;
     private TextInputEditText etSnoozeInterval;
-    
+
     private Button btnTestConnection;
+    private Button btnTestNightscout;
     private Button btnAutoSearchBeta;
     private ImageView ivHelp;
 
@@ -81,25 +87,25 @@ public class SettingsActivity extends AppCompatActivity {
     private Button btnTestRingtone;
 
     private Button btnSave;
-    private Button btnSaveBottom;
     private TextView tvVersionInfo;
     private TextView tvTelegramLink;
-    
-    // New UI Elements
-    private RadioGroup rgDataSource;
-    private RadioButton rbSourceNetwork;
-    private RadioButton rbSourceBroadcast;
+
+    // Data Sources UI Elements
+    private CheckBox chkSourceBroadcast;
+    private CheckBox chkSourceNightscout;
+    private CheckBox chkSourceWifi;
+    private View cardNightscoutSetup;
     private View cardCoreSetup;
     private TextView tvDataSourceHint;
-    
+
     private CheckBox chkAutoCheckUpdates;
     private Button btnCheckUpdate;
     private Button btnDownloadUpdate;
     private TextView tvUpdateStatus;
-    private Button btnCancelBottom;
-    
+
     private CheckBox chkNightlightMode;
     private Spinner spAppLanguage;
+    private boolean isLoadingSettings = true;
     
     private CheckBox chkUseFlashOnAlarm;
     private CheckBox chkEnableAutoClose;
@@ -149,6 +155,10 @@ public class SettingsActivity extends AppCompatActivity {
     private void initViews() {
         etIpAddress = findViewById(R.id.etIpAddress);
         etApiSecret = findViewById(R.id.etApiSecret);
+        etNightscoutUrl = findViewById(R.id.etNightscoutUrl);
+        etNightscoutSecret = findViewById(R.id.etNightscoutSecret);
+        etPollInterval = findViewById(R.id.etPollInterval);
+        etStaleThreshold = findViewById(R.id.etStaleThreshold);
         etToggleInterval = findViewById(R.id.etToggleInterval);
         etDayStart = findViewById(R.id.etDayStart);
         etDayEnd = findViewById(R.id.etDayEnd);
@@ -157,8 +167,9 @@ public class SettingsActivity extends AppCompatActivity {
         etNightLow = findViewById(R.id.etNightLow);
         etNightHigh = findViewById(R.id.etNightHigh);
         etSnoozeInterval = findViewById(R.id.etSnoozeInterval);
-        
+
         btnTestConnection = findViewById(R.id.btnTestConnection);
+        btnTestNightscout = findViewById(R.id.btnTestNightscout);
         btnAutoSearchBeta = findViewById(R.id.btnAutoSearchBeta);
         ivHelp = findViewById(R.id.ivHelp);
 
@@ -191,21 +202,20 @@ public class SettingsActivity extends AppCompatActivity {
         btnTestRingtone = findViewById(R.id.btnTestRingtone);
 
         btnSave = findViewById(R.id.btnSave);
-        btnSaveBottom = findViewById(R.id.btnSaveBottom);
         tvVersionInfo = findViewById(R.id.tvVersionInfo);
         tvTelegramLink = findViewById(R.id.tvTelegramLink);
 
-        rgDataSource = findViewById(R.id.rgDataSource);
-        rbSourceNetwork = findViewById(R.id.rbSourceNetwork);
-        rbSourceBroadcast = findViewById(R.id.rbSourceBroadcast);
+        chkSourceBroadcast = findViewById(R.id.chkSourceBroadcast);
+        chkSourceNightscout = findViewById(R.id.chkSourceNightscout);
+        chkSourceWifi = findViewById(R.id.chkSourceWifi);
+        cardNightscoutSetup = findViewById(R.id.cardNightscoutSetup);
         cardCoreSetup = findViewById(R.id.cardCoreSetup);
         tvDataSourceHint = findViewById(R.id.tvDataSourceHint);
-        
+
         chkAutoCheckUpdates = findViewById(R.id.chkAutoCheckUpdates);
         btnCheckUpdate = findViewById(R.id.btnCheckUpdate);
         btnDownloadUpdate = findViewById(R.id.btnDownloadUpdate);
         tvUpdateStatus = findViewById(R.id.tvUpdateStatus);
-        btnCancelBottom = findViewById(R.id.btnCancelBottom);
 
         chkNightlightMode = findViewById(R.id.chkNightlightMode);
         spAppLanguage = findViewById(R.id.spAppLanguage);
@@ -225,10 +235,15 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void loadSavedSettings() {
+        isLoadingSettings = true;
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        
+
         etIpAddress.setText(prefs.getString("ip_address", "192.168.0.111"));
         etApiSecret.setText(prefs.getString("api_secret", "FBB9F80F9AC22E5B15F6DA1FFE599E14"));
+        etNightscoutUrl.setText(prefs.getString("nightscout_url", ""));
+        etNightscoutSecret.setText(prefs.getString("nightscout_api_secret", ""));
+        etPollInterval.setText(String.valueOf(prefs.getInt("poll_interval_seconds", 60)));
+        etStaleThreshold.setText(String.valueOf(prefs.getInt("stale_threshold_minutes", 2)));
         etToggleInterval.setText(String.valueOf(prefs.getInt("toggle_interval", 5)));
         
         etDayStart.setText(prefs.getString("day_start", "08:00"));
@@ -289,19 +304,29 @@ public class SettingsActivity extends AppCompatActivity {
             tvVersionInfo.setText(getString(R.string.label_version) + ": 1.1");
         }
 
-        // Load new settings
-        String dataSource = prefs.getString("data_source", "network");
-        if ("broadcast".equals(dataSource)) {
-            rbSourceBroadcast.setChecked(true);
-            updateCoreSetupInteractivity(false);
-            tvDataSourceHint.setText(getString(R.string.hint_source_broadcast));
-            tvDataSourceHint.setTextColor(getResources().getColor(R.color.color_warning_orange));
+        // Load multi-source checkboxes with migration from legacy data_source
+        boolean srcBroadcast;
+        boolean srcNightscout;
+        boolean srcWifi;
+        if (prefs.contains("source_broadcast_enabled")
+                || prefs.contains("source_nightscout_enabled")
+                || prefs.contains("source_wifi_enabled")) {
+            srcBroadcast = prefs.getBoolean("source_broadcast_enabled", false);
+            srcNightscout = prefs.getBoolean("source_nightscout_enabled", false);
+            srcWifi = prefs.getBoolean("source_wifi_enabled", true);
         } else {
-            rbSourceNetwork.setChecked(true);
-            updateCoreSetupInteractivity(true);
-            tvDataSourceHint.setText(getString(R.string.hint_source_network));
-            tvDataSourceHint.setTextColor(getResources().getColor(R.color.text_secondary));
+            String legacySource = prefs.getString("data_source", "network");
+            srcBroadcast = "broadcast".equals(legacySource);
+            srcNightscout = false;
+            srcWifi = !"broadcast".equals(legacySource);
         }
+        if (!srcBroadcast && !srcNightscout && !srcWifi) {
+            srcWifi = true;
+        }
+        chkSourceBroadcast.setChecked(srcBroadcast);
+        chkSourceNightscout.setChecked(srcNightscout);
+        chkSourceWifi.setChecked(srcWifi);
+        updateSourceCardsInteractivity();
 
         boolean autoCheck = prefs.getBoolean("auto_check_updates", true);
         chkAutoCheckUpdates.setChecked(autoCheck);
@@ -339,6 +364,7 @@ public class SettingsActivity extends AppCompatActivity {
         if (autoCheck) {
             checkForUpdates(true); // Silent check on load
         }
+        isLoadingSettings = false;
     }
 
     private void resolveRingtoneNameDisplay() {
@@ -398,19 +424,65 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void setupListeners() {
         btnSave.setOnClickListener(v -> saveSettings());
-        btnSaveBottom.setOnClickListener(v -> saveSettings());
-        btnCancelBottom.setOnClickListener(v -> finish());
-        
-        rgDataSource.setOnCheckedChangeListener((group, checkedId) -> {
-            boolean isNetwork = checkedId == R.id.rbSourceNetwork;
-            updateCoreSetupInteractivity(isNetwork);
-            if (isNetwork) {
-                tvDataSourceHint.setText(getString(R.string.hint_source_network));
-                tvDataSourceHint.setTextColor(getResources().getColor(R.color.text_secondary));
-            } else {
-                tvDataSourceHint.setText(getString(R.string.hint_source_broadcast));
-                tvDataSourceHint.setTextColor(getResources().getColor(R.color.color_warning_orange));
+
+        android.widget.CompoundButton.OnCheckedChangeListener sourceListener = (buttonView, isChecked) -> {
+            if (isLoadingSettings) return;
+            if (!chkSourceBroadcast.isChecked() && !chkSourceNightscout.isChecked() && !chkSourceWifi.isChecked()) {
+                buttonView.setChecked(true);
+                showToast(getString(R.string.msg_at_least_one_source));
+                return;
             }
+            updateSourceCardsInteractivity();
+            autoSaveSettings(false);
+        };
+        chkSourceBroadcast.setOnCheckedChangeListener(sourceListener);
+        chkSourceNightscout.setOnCheckedChangeListener(sourceListener);
+        chkSourceWifi.setOnCheckedChangeListener(sourceListener);
+
+        android.widget.CompoundButton.OnCheckedChangeListener autoSaveCheckboxListener = (buttonView, isChecked) -> {
+            if (!isLoadingSettings) autoSaveSettings(false);
+        };
+        chkAutoCheckUpdates.setOnCheckedChangeListener(autoSaveCheckboxListener);
+        chkNightlightMode.setOnCheckedChangeListener(autoSaveCheckboxListener);
+        if (chkUseFlashOnAlarm != null) chkUseFlashOnAlarm.setOnCheckedChangeListener(autoSaveCheckboxListener);
+        if (chkEnableAutoClose != null) chkEnableAutoClose.setOnCheckedChangeListener(autoSaveCheckboxListener);
+        if (chkDisableAutoScan != null) chkDisableAutoScan.setOnCheckedChangeListener(autoSaveCheckboxListener);
+        if (chkWifiWatchdog != null) chkWifiWatchdog.setOnCheckedChangeListener(autoSaveCheckboxListener);
+
+        TextWatcher autoSaveWatcher = new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (!isLoadingSettings) {
+                    autoSaveSettings(false);
+                }
+            }
+        };
+        etIpAddress.addTextChangedListener(autoSaveWatcher);
+        etApiSecret.addTextChangedListener(autoSaveWatcher);
+        etNightscoutUrl.addTextChangedListener(autoSaveWatcher);
+        etNightscoutSecret.addTextChangedListener(autoSaveWatcher);
+        etPollInterval.addTextChangedListener(autoSaveWatcher);
+        etStaleThreshold.addTextChangedListener(autoSaveWatcher);
+        etToggleInterval.addTextChangedListener(autoSaveWatcher);
+        etDayStart.addTextChangedListener(autoSaveWatcher);
+        etDayEnd.addTextChangedListener(autoSaveWatcher);
+        etDayLow.addTextChangedListener(autoSaveWatcher);
+        etDayHigh.addTextChangedListener(autoSaveWatcher);
+        etNightLow.addTextChangedListener(autoSaveWatcher);
+        etNightHigh.addTextChangedListener(autoSaveWatcher);
+        etSnoozeInterval.addTextChangedListener(autoSaveWatcher);
+        if (etAutoCloseTime != null) etAutoCloseTime.addTextChangedListener(autoSaveWatcher);
+
+        spAppLanguage.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (!isLoadingSettings) {
+                    applySelectedLanguage();
+                }
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) {}
         });
 
         btnCheckUpdate.setOnClickListener(v -> checkForUpdates(false));
@@ -423,9 +495,10 @@ public class SettingsActivity extends AppCompatActivity {
                 }
             }
         });
-        
+
         ivHelp.setOnClickListener(v -> showHelpDialog());
         btnTestConnection.setOnClickListener(v -> testConnection());
+        btnTestNightscout.setOnClickListener(v -> testNightscoutConnection());
         btnAutoSearchBeta.setOnClickListener(v -> startNetworkAutoDiscovery());
 
         // Preset Colors
@@ -451,7 +524,10 @@ public class SettingsActivity extends AppCompatActivity {
                 }
 
                 @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-                @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+                @Override
+                public void onStopTrackingTouch(SeekBar seekBar) {
+                    if (!isLoadingSettings) autoSaveSettings(false);
+                }
             });
         }
 
@@ -475,6 +551,9 @@ public class SettingsActivity extends AppCompatActivity {
     private void updateColor(int color) {
         selectedColor = color;
         viewColorPreview.setBackgroundColor(selectedColor);
+        if (!isLoadingSettings) {
+            autoSaveSettings(false);
+        }
     }
 
     private void setupColorButtonTint(Button btn, int color) {
@@ -584,16 +663,19 @@ public class SettingsActivity extends AppCompatActivity {
                         selectedSoundType = SoundGenerator.SOUND_BUILTIN_PULSE;
                         selectedRingtoneUri = null;
                         resolveRingtoneNameDisplay();
+                        autoSaveSettings(false);
                         SoundGenerator.playPreview(selectedSoundType, null);
                     } else if (which == 1) {
                         selectedSoundType = SoundGenerator.SOUND_BUILTIN_RADAR;
                         selectedRingtoneUri = null;
                         resolveRingtoneNameDisplay();
+                        autoSaveSettings(false);
                         SoundGenerator.playPreview(selectedSoundType, null);
                     } else if (which == 2) {
                         selectedSoundType = SoundGenerator.SOUND_BUILTIN_CHIME;
                         selectedRingtoneUri = null;
                         resolveRingtoneNameDisplay();
+                        autoSaveSettings(false);
                         SoundGenerator.playPreview(selectedSoundType, null);
                     } else if (which == 3) {
                         selectedSoundType = SoundGenerator.SOUND_SYSTEM;
@@ -610,6 +692,7 @@ public class SettingsActivity extends AppCompatActivity {
                         selectedSoundType = SoundGenerator.SOUND_SILENT;
                         selectedRingtoneUri = "silent";
                         resolveRingtoneNameDisplay();
+                        autoSaveSettings(false);
                     }
                 })
                 .setNegativeButton(getString(R.string.btn_cancel), null)
@@ -629,6 +712,7 @@ public class SettingsActivity extends AppCompatActivity {
                 selectedSoundType = SoundGenerator.SOUND_SILENT;
             }
             resolveRingtoneNameDisplay();
+            autoSaveSettings(false);
         }
     }
 
@@ -712,137 +796,7 @@ public class SettingsActivity extends AppCompatActivity {
         btnTestRingtone.setText(getString(R.string.btn_test_alarm_start));
     }
 
-    private void saveSettings() {
-        // 1. IP Validation
-        String ip = etIpAddress.getText() != null ? etIpAddress.getText().toString().trim() : "";
-        if (rbSourceNetwork.isChecked() && ip.isEmpty()) {
-            showToast(getString(R.string.msg_invalid_ip));
-            return;
-        }
-
-        // 2. Toggle Interval Validation
-        String intervalStr = etToggleInterval.getText() != null ? etToggleInterval.getText().toString().trim() : "";
-        int interval;
-        try {
-            interval = Integer.parseInt(intervalStr);
-            if (interval < 1) {
-                showToast(getString(R.string.msg_invalid_interval));
-                return;
-            }
-        } catch (NumberFormatException e) {
-            showToast(getString(R.string.msg_invalid_interval));
-            return;
-        }
-
-        // 3. Time Slots HH:mm Validations
-        String dayStart = etDayStart.getText() != null ? etDayStart.getText().toString().trim() : "";
-        String dayEnd = etDayEnd.getText() != null ? etDayEnd.getText().toString().trim() : "";
-        
-        if (!validateTimeFormat(dayStart) || !validateTimeFormat(dayEnd)) {
-            showToast(getString(R.string.msg_invalid_time_format));
-            return;
-        }
-
-        // 4. Day Threshold Validations
-        String dayLowStr = etDayLow.getText() != null ? etDayLow.getText().toString().trim() : "";
-        String dayHighStr = etDayHigh.getText() != null ? etDayHigh.getText().toString().trim() : "";
-        float dayLow, dayHigh;
-        try {
-            dayLow = Float.parseFloat(dayLowStr);
-            dayHigh = Float.parseFloat(dayHighStr);
-            if (dayLow <= 0 || dayHigh <= 0 || dayHigh <= dayLow) {
-                showToast(getString(R.string.msg_invalid_thresholds));
-                return;
-            }
-        } catch (NumberFormatException e) {
-            showToast(getString(R.string.err_invalid_day_thresholds));
-            return;
-        }
-
-        // 5. Night Threshold Validations
-        String nightLowStr = etNightLow.getText() != null ? etNightLow.getText().toString().trim() : "";
-        String nightHighStr = etNightHigh.getText() != null ? etNightHigh.getText().toString().trim() : "";
-        float nightLow, nightHigh;
-        try {
-            nightLow = Float.parseFloat(nightLowStr);
-            nightHigh = Float.parseFloat(nightHighStr);
-            if (nightLow <= 0 || nightHigh <= 0 || nightHigh <= nightLow) {
-                showToast(getString(R.string.msg_invalid_thresholds));
-                return;
-            }
-        } catch (NumberFormatException e) {
-            showToast(getString(R.string.err_invalid_night_thresholds));
-            return;
-        }
-
-        // 6. Snooze Interval Validation
-        String snoozeStr = etSnoozeInterval.getText() != null ? etSnoozeInterval.getText().toString().trim() : "";
-        int snoozeInterval;
-        try {
-            snoozeInterval = Integer.parseInt(snoozeStr);
-            if (snoozeInterval < 1) {
-                showToast(getString(R.string.msg_invalid_snooze));
-                return;
-            }
-        } catch (NumberFormatException e) {
-            showToast(getString(R.string.msg_invalid_snooze));
-            return;
-        }
-
-        String autoCloseTime = etAutoCloseTime != null && etAutoCloseTime.getText() != null ? etAutoCloseTime.getText().toString().trim() : "";
-        boolean enableAutoClose = chkEnableAutoClose != null && chkEnableAutoClose.isChecked();
-        if (enableAutoClose && !validateTimeFormat(autoCloseTime)) {
-            showToast(getString(R.string.err_invalid_autoclose_time));
-            return;
-        }
-
-        // Normalize auto-close time format to standard HH:mm (with leading zeros)
-        String normalizedAutoCloseTime = autoCloseTime;
-        if (!autoCloseTime.isEmpty() && autoCloseTime.contains(":")) {
-            String[] parts = autoCloseTime.split(":");
-            try {
-                int h = Integer.parseInt(parts[0]);
-                int m = Integer.parseInt(parts[1]);
-                normalizedAutoCloseTime = String.format(Locale.US, "%02d:%02d", h, m);
-            } catch (NumberFormatException ignored) {}
-        }
-
-        boolean useFlashAlarm = chkUseFlashOnAlarm != null && chkUseFlashOnAlarm.isChecked();
-        boolean disableAutoScan = chkDisableAutoScan != null && chkDisableAutoScan.isChecked();
-        boolean wifiWatchdog = chkWifiWatchdog != null && chkWifiWatchdog.isChecked();
-
-        String apiSecret = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
-        
-        String dataSource = rbSourceNetwork.isChecked() ? "network" : "broadcast";
-        boolean autoCheck = chkAutoCheckUpdates.isChecked();
-        boolean nightlightMode = chkNightlightMode.isChecked();
-
-        // Save successfully
-        SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
-        editor.putString("data_source", dataSource);
-        editor.putBoolean("auto_check_updates", autoCheck);
-        editor.putBoolean("nightlight_mode", nightlightMode);
-        editor.putBoolean("alarm_use_flash", useFlashAlarm);
-        editor.putBoolean("enable_autoclose", enableAutoClose);
-        editor.putString("autoclose_time", normalizedAutoCloseTime);
-        editor.putBoolean("disable_auto_scan", disableAutoScan);
-        editor.putBoolean("wifi_watchdog", wifiWatchdog);
-        editor.putString("ip_address", ip);
-        editor.putString("api_secret", apiSecret);
-        editor.putInt("toggle_interval", interval);
-        editor.putString("day_start", dayStart);
-        editor.putString("day_end", dayEnd);
-        editor.putFloat("day_low", dayLow);
-        editor.putFloat("day_high", dayHigh);
-        editor.putFloat("night_low", nightLow);
-        editor.putFloat("night_high", nightHigh);
-        editor.putInt("text_color", selectedColor);
-        editor.putInt("glucose_brightness", sbGlucoseBrightness != null ? sbGlucoseBrightness.getProgress() : 80);
-        editor.putString("alarm_sound_type", selectedSoundType);
-        editor.putString("alarm_uri", selectedRingtoneUri);
-        editor.putInt("snooze_interval", snoozeInterval);
-        editor.apply();
-
+    private void applySelectedLanguage() {
         int selectedLangPos = spAppLanguage.getSelectedItemPosition();
         String targetLangCode = "";
         if (selectedLangPos == 1) {
@@ -851,15 +805,192 @@ public class SettingsActivity extends AppCompatActivity {
             targetLangCode = "en";
         }
 
-        LocaleListCompat currentLocales2 = AppCompatDelegate.getApplicationLocales();
-        String activeLangCode = currentLocales2.isEmpty() ? "" : currentLocales2.get(0).getLanguage();
+        LocaleListCompat currentLocales = AppCompatDelegate.getApplicationLocales();
+        String activeLangCode = currentLocales.isEmpty() ? "" : currentLocales.get(0).getLanguage();
 
         if (!targetLangCode.equals(activeLangCode)) {
             AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(targetLangCode));
         }
+    }
 
+    /**
+     * Persists all currently valid settings to SharedPreferences immediately without blocking the user
+     * with validation toasts while typing. Invalid or incomplete numeric/time fields are skipped
+     * so previously saved valid values remain intact.
+     */
+    private void autoSaveSettings(boolean applyLanguage) {
+        SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
+
+        boolean srcBroadcast = chkSourceBroadcast.isChecked();
+        boolean srcNightscout = chkSourceNightscout.isChecked();
+        boolean srcWifi = chkSourceWifi.isChecked();
+        if (!srcBroadcast && !srcNightscout && !srcWifi) {
+            srcWifi = true;
+        }
+        editor.putBoolean("source_broadcast_enabled", srcBroadcast);
+        editor.putBoolean("source_nightscout_enabled", srcNightscout);
+        editor.putBoolean("source_wifi_enabled", srcWifi);
+        // Keep legacy key synchronized for compatibility
+        editor.putString("data_source", (srcBroadcast && !srcNightscout && !srcWifi) ? "broadcast" : "network");
+
+        String ip = etIpAddress.getText() != null ? etIpAddress.getText().toString().trim() : "";
+        String apiSecret = etApiSecret.getText() != null ? etApiSecret.getText().toString().trim() : "";
+        String nsUrl = etNightscoutUrl.getText() != null ? etNightscoutUrl.getText().toString().trim() : "";
+        String nsSecret = etNightscoutSecret.getText() != null ? etNightscoutSecret.getText().toString().trim() : "";
+        editor.putString("ip_address", ip);
+        editor.putString("api_secret", apiSecret);
+        editor.putString("nightscout_url", nsUrl);
+        editor.putString("nightscout_api_secret", nsSecret);
+
+        // Polling interval (seconds, min 15)
+        try {
+            String pollStr = etPollInterval.getText() != null ? etPollInterval.getText().toString().trim() : "";
+            int pollSec = Integer.parseInt(pollStr);
+            if (pollSec >= 15) {
+                editor.putInt("poll_interval_seconds", pollSec);
+            }
+        } catch (NumberFormatException ignored) {}
+
+        // Stale threshold (minutes, min 1)
+        try {
+            String staleStr = etStaleThreshold.getText() != null ? etStaleThreshold.getText().toString().trim() : "";
+            int staleMin = Integer.parseInt(staleStr);
+            if (staleMin >= 1) {
+                editor.putInt("stale_threshold_minutes", staleMin);
+            }
+        } catch (NumberFormatException ignored) {}
+
+        // Toggle interval (seconds, min 1)
+        try {
+            String intervalStr = etToggleInterval.getText() != null ? etToggleInterval.getText().toString().trim() : "";
+            int interval = Integer.parseInt(intervalStr);
+            if (interval >= 1) {
+                editor.putInt("toggle_interval", interval);
+            }
+        } catch (NumberFormatException ignored) {}
+
+        // Day time range
+        String dayStart = etDayStart.getText() != null ? etDayStart.getText().toString().trim() : "";
+        String dayEnd = etDayEnd.getText() != null ? etDayEnd.getText().toString().trim() : "";
+        if (validateTimeFormat(dayStart)) {
+            editor.putString("day_start", dayStart);
+        }
+        if (validateTimeFormat(dayEnd)) {
+            editor.putString("day_end", dayEnd);
+        }
+
+        // Day thresholds
+        try {
+            String dayLowStr = etDayLow.getText() != null ? etDayLow.getText().toString().trim() : "";
+            String dayHighStr = etDayHigh.getText() != null ? etDayHigh.getText().toString().trim() : "";
+            float dayLow = Float.parseFloat(dayLowStr);
+            float dayHigh = Float.parseFloat(dayHighStr);
+            if (dayLow > 0 && dayHigh > dayLow) {
+                editor.putFloat("day_low", dayLow);
+                editor.putFloat("day_high", dayHigh);
+            }
+        } catch (NumberFormatException ignored) {}
+
+        // Night thresholds
+        try {
+            String nightLowStr = etNightLow.getText() != null ? etNightLow.getText().toString().trim() : "";
+            String nightHighStr = etNightHigh.getText() != null ? etNightHigh.getText().toString().trim() : "";
+            float nightLow = Float.parseFloat(nightLowStr);
+            float nightHigh = Float.parseFloat(nightHighStr);
+            if (nightLow > 0 && nightHigh > nightLow) {
+                editor.putFloat("night_low", nightLow);
+                editor.putFloat("night_high", nightHigh);
+            }
+        } catch (NumberFormatException ignored) {}
+
+        // Snooze interval
+        try {
+            String snoozeStr = etSnoozeInterval.getText() != null ? etSnoozeInterval.getText().toString().trim() : "";
+            int snoozeInterval = Integer.parseInt(snoozeStr);
+            if (snoozeInterval >= 1) {
+                editor.putInt("snooze_interval", snoozeInterval);
+            }
+        } catch (NumberFormatException ignored) {}
+
+        // Auto-close time
+        String autoCloseTime = etAutoCloseTime != null && etAutoCloseTime.getText() != null
+                ? etAutoCloseTime.getText().toString().trim() : "";
+        boolean enableAutoClose = chkEnableAutoClose != null && chkEnableAutoClose.isChecked();
+        editor.putBoolean("enable_autoclose", enableAutoClose);
+        if (validateTimeFormat(autoCloseTime)) {
+            String[] parts = autoCloseTime.split(":");
+            try {
+                int h = Integer.parseInt(parts[0]);
+                int m = Integer.parseInt(parts[1]);
+                editor.putString("autoclose_time", String.format(Locale.US, "%02d:%02d", h, m));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        editor.putBoolean("auto_check_updates", chkAutoCheckUpdates.isChecked());
+        editor.putBoolean("nightlight_mode", chkNightlightMode.isChecked());
+        editor.putBoolean("alarm_use_flash", chkUseFlashOnAlarm != null && chkUseFlashOnAlarm.isChecked());
+        editor.putBoolean("disable_auto_scan", chkDisableAutoScan != null && chkDisableAutoScan.isChecked());
+        editor.putBoolean("wifi_watchdog", chkWifiWatchdog != null && chkWifiWatchdog.isChecked());
+        editor.putInt("text_color", selectedColor);
+        editor.putInt("glucose_brightness", sbGlucoseBrightness != null ? sbGlucoseBrightness.getProgress() : 80);
+        editor.putString("alarm_sound_type", selectedSoundType);
+        editor.putString("alarm_uri", selectedRingtoneUri);
+        editor.apply();
+
+        if (applyLanguage) {
+            applySelectedLanguage();
+        }
+    }
+
+    private void saveSettings() {
+        // Validate enabled source connection details before applying & closing
+        String nsUrl = etNightscoutUrl.getText() != null ? etNightscoutUrl.getText().toString().trim() : "";
+        if (chkSourceNightscout.isChecked() && nsUrl.isEmpty()) {
+            showToast(getString(R.string.msg_invalid_nightscout_url));
+            return;
+        }
+
+        String ip = etIpAddress.getText() != null ? etIpAddress.getText().toString().trim() : "";
+        if (chkSourceWifi.isChecked() && ip.isEmpty()) {
+            showToast(getString(R.string.msg_invalid_ip));
+            return;
+        }
+
+        String pollStr = etPollInterval.getText() != null ? etPollInterval.getText().toString().trim() : "";
+        try {
+            int pollSec = Integer.parseInt(pollStr);
+            if (pollSec < 15) {
+                showToast(getString(R.string.msg_invalid_poll_interval));
+                return;
+            }
+        } catch (NumberFormatException e) {
+            showToast(getString(R.string.msg_invalid_poll_interval));
+            return;
+        }
+
+        String staleStr = etStaleThreshold.getText() != null ? etStaleThreshold.getText().toString().trim() : "";
+        try {
+            int staleMin = Integer.parseInt(staleStr);
+            if (staleMin < 1) {
+                showToast(getString(R.string.msg_invalid_stale_threshold));
+                return;
+            }
+        } catch (NumberFormatException e) {
+            showToast(getString(R.string.msg_invalid_stale_threshold));
+            return;
+        }
+
+        autoSaveSettings(true);
         Toast.makeText(this, getString(R.string.msg_saved), Toast.LENGTH_SHORT).show();
         finish();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (!isLoadingSettings) {
+            autoSaveSettings(false);
+        }
     }
 
     private boolean validateTimeFormat(String timeStr) {
@@ -1233,15 +1364,105 @@ public class SettingsActivity extends AppCompatActivity {
         return CryptoUtils.computeSHA1(input);
     }
 
-    private void updateCoreSetupInteractivity(boolean isNetwork) {
-        cardCoreSetup.setAlpha(isNetwork ? 1.0f : 0.5f);
-        etIpAddress.setEnabled(isNetwork);
-        etApiSecret.setEnabled(isNetwork);
-        if (chkDisableAutoScan != null) chkDisableAutoScan.setEnabled(isNetwork);
-        if (chkWifiWatchdog != null) chkWifiWatchdog.setEnabled(isNetwork);
-        btnTestConnection.setEnabled(isNetwork);
-        btnAutoSearchBeta.setEnabled(isNetwork);
-        btnSave.setEnabled(isNetwork);
+    private void updateSourceCardsInteractivity() {
+        boolean isNightscout = chkSourceNightscout.isChecked();
+        boolean isWifi = chkSourceWifi.isChecked();
+
+        if (cardNightscoutSetup != null) {
+            cardNightscoutSetup.setAlpha(isNightscout ? 1.0f : 0.45f);
+            etNightscoutUrl.setEnabled(isNightscout);
+            etNightscoutSecret.setEnabled(isNightscout);
+            btnTestNightscout.setEnabled(isNightscout);
+        }
+
+        if (cardCoreSetup != null) {
+            cardCoreSetup.setAlpha(isWifi ? 1.0f : 0.45f);
+            etIpAddress.setEnabled(isWifi);
+            etApiSecret.setEnabled(isWifi);
+            if (chkDisableAutoScan != null) chkDisableAutoScan.setEnabled(isWifi);
+            if (chkWifiWatchdog != null) chkWifiWatchdog.setEnabled(isWifi);
+            btnTestConnection.setEnabled(isWifi);
+            btnAutoSearchBeta.setEnabled(isWifi);
+        }
+    }
+
+    private void testNightscoutConnection() {
+        final String rawUrl = etNightscoutUrl.getText() != null ? etNightscoutUrl.getText().toString().trim() : "";
+        final String secret = etNightscoutSecret.getText() != null ? etNightscoutSecret.getText().toString().trim() : "";
+
+        if (rawUrl.isEmpty()) {
+            Toast.makeText(this, getString(R.string.msg_invalid_nightscout_url), Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        final String testUrl = GlucoseDataFetcher.buildNightscoutUrl(rawUrl, "/api/v1/entries/sgv.json", "count=1");
+
+        final ProgressDialog dialog = new ProgressDialog(this);
+        dialog.setTitle(getString(R.string.dialog_test_connection_title));
+        dialog.setMessage(getString(R.string.dialog_test_nightscout_msg, rawUrl));
+        dialog.setCancelable(false);
+        dialog.show();
+
+        try {
+            Request.Builder requestBuilder = new Request.Builder().url(testUrl);
+            if (!secret.isEmpty()) {
+                requestBuilder.addHeader("api-secret", CryptoUtils.computeSHA1(secret));
+            }
+            Request request = requestBuilder.build();
+
+            HttpClientProvider.getClient().newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                    runOnUiThread(() -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        dialog.dismiss();
+                        new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                .setTitle(getString(R.string.dialog_test_error_title))
+                                .setMessage(getString(R.string.dialog_test_nightscout_error_msg, rawUrl, e.getMessage()))
+                                .setPositiveButton(getString(R.string.btn_ok), null)
+                                .show();
+                    });
+                }
+
+                @Override
+                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                    final int code = response.code();
+                    final String responseBody = response.body() != null ? response.body().string() : "";
+                    response.close();
+
+                    runOnUiThread(() -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        dialog.dismiss();
+                        if (code == 200) {
+                            new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                    .setTitle(getString(R.string.dialog_test_success_title))
+                                    .setMessage(getString(R.string.dialog_test_nightscout_success_msg))
+                                    .setPositiveButton(getString(R.string.dialog_test_success_btn), null)
+                                    .show();
+                        } else if (code == 401 || code == 403) {
+                            new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                    .setTitle(getString(R.string.dialog_test_auth_title))
+                                    .setMessage(getString(R.string.dialog_test_nightscout_auth_msg))
+                                    .setPositiveButton(getString(R.string.btn_ok), null)
+                                    .show();
+                        } else {
+                            new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                    .setTitle(getString(R.string.dialog_test_unknown_title))
+                                    .setMessage(getString(R.string.dialog_test_unknown_msg, code, responseBody))
+                                    .setPositiveButton(getString(R.string.btn_ok), null)
+                                    .show();
+                        }
+                    });
+                }
+            });
+        } catch (IllegalArgumentException e) {
+            dialog.dismiss();
+            new AlertDialog.Builder(SettingsActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle(getString(R.string.dialog_test_error_title))
+                    .setMessage(getString(R.string.dialog_test_nightscout_error_msg, rawUrl, e.getMessage()))
+                    .setPositiveButton(getString(R.string.btn_ok), null)
+                    .show();
+        }
     }
 
     private void checkForUpdates(boolean silent) {

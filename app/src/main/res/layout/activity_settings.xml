@@ -48,7 +48,7 @@
                 app:tint="@color/colorPrimary"/>
         </LinearLayout>
 
-        <!-- Data Source Card -->
+        <!-- Data Source & Priority Card -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -70,43 +70,185 @@
                     android:textColor="@color/colorPrimary"
                     android:textStyle="bold"
                     android:textSize="16sp"
-                    android:layout_marginBottom="12dp"/>
+                    android:layout_marginBottom="8dp"/>
 
-                <RadioGroup
-                    android:id="@+id/rgDataSource"
+                <CheckBox
+                    android:id="@+id/chkSourceBroadcast"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical">
+                    android:text="@string/label_source_broadcast_priority"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/colorPrimary"
+                    android:textSize="14sp"/>
 
-                    <RadioButton
-                        android:id="@+id/rbSourceNetwork"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="@string/label_source_network"
-                        android:textColor="@color/text_primary"
-                        android:buttonTint="@color/colorPrimary"
-                        android:textSize="14sp"
-                        android:checked="true"/>
+                <CheckBox
+                    android:id="@+id/chkSourceNightscout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/label_source_nightscout_priority"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/colorPrimary"
+                    android:textSize="14sp"/>
 
-                    <RadioButton
-                        android:id="@+id/rbSourceBroadcast"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="@string/label_source_broadcast"
-                        android:textColor="@color/text_primary"
-                        android:buttonTint="@color/colorPrimary"
-                        android:textSize="14sp"
-                        android:layout_marginTop="8dp"/>
-                </RadioGroup>
+                <CheckBox
+                    android:id="@+id/chkSourceWifi"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/label_source_wifi_priority"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/colorPrimary"
+                    android:textSize="14sp"
+                    android:checked="true"/>
 
                 <TextView
                     android:id="@+id/tvDataSourceHint"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="@string/hint_source_network"
+                    android:layout_marginBottom="12dp"
+                    android:text="@string/hint_source_priority"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp"/>
+
+                <!-- Polling Interval & Stale Threshold Row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="12dp">
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="8dp"
+                        android:hint="@string/label_poll_interval"
+                        app:hintTextColor="@color/colorPrimary"
+                        app:boxStrokeColor="@color/colorPrimary"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etPollInterval"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="number"
+                            android:textColor="@color/text_primary"
+                            android:singleLine="true"/>
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="@string/label_stale_threshold"
+                        app:hintTextColor="@color/colorPrimary"
+                        app:boxStrokeColor="@color/colorPrimary"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etStaleThreshold"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="number"
+                            android:textColor="@color/text_primary"
+                            android:singleLine="true"/>
+                    </com.google.android.material.textfield.TextInputLayout>
+                </LinearLayout>
+
+                <!-- Apply & Exit Button (kept in Data Source section) -->
+                <Button
+                    android:id="@+id/btnSave"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/btn_apply_settings"
+                    android:textColor="@color/black"
+                    android:backgroundTint="@color/colorPrimary"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    style="@style/Widget.MaterialComponents.Button"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"/>
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Nightscout Setup Card -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cardNightscoutSetup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/bg_card"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_nightscout_config"
+                    android:textColor="@color/colorPrimary"
+                    android:textStyle="bold"
+                    android:textSize="16sp"
+                    android:layout_marginBottom="12dp"/>
+
+                <!-- Nightscout URL -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/label_nightscout_url"
+                    app:hintTextColor="@color/colorPrimary"
+                    app:boxStrokeColor="@color/colorPrimary"
+                    android:layout_marginBottom="12dp"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etNightscoutUrl"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textUri"
+                        android:textColor="@color/text_primary"
+                        android:singleLine="true"/>
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- Nightscout API Secret -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/label_nightscout_secret"
+                    app:hintTextColor="@color/colorPrimary"
+                    app:boxStrokeColor="@color/colorPrimary"
+                    android:layout_marginBottom="12dp"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etNightscoutSecret"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="text"
+                        android:textColor="@color/text_primary"
+                        android:singleLine="true"/>
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- Test Nightscout Connection Button -->
+                <Button
+                    android:id="@+id/btnTestNightscout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/btn_test_nightscout"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_primary"
+                    android:backgroundTint="@color/bg_input"
+                    style="@style/Widget.MaterialComponents.Button"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"/>
 
             </LinearLayout>
         </androidx.cardview.widget.CardView>
@@ -236,21 +378,6 @@
                         android:paddingStart="12dp"
                         android:paddingEnd="12dp"/>
                 </LinearLayout>
-
-                <!-- Save & Exit Button (Full width) -->
-                <Button
-                    android:id="@+id/btnSave"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/btn_apply_settings"
-                    android:textColor="@color/black"
-                    android:backgroundTint="@color/colorPrimary"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:layout_marginTop="12dp"
-                    style="@style/Widget.MaterialComponents.Button"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"/>
 
             </LinearLayout>
         </androidx.cardview.widget.CardView>
@@ -1112,45 +1239,16 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- Bottom Buttons Row -->
-        <LinearLayout
+        <!-- Auto-Save Hint Footer -->
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
+            android:gravity="center"
             android:layout_marginTop="8dp"
-            android:layout_marginBottom="8dp">
-
-            <!-- Cancel Button -->
-            <Button
-                android:id="@+id/btnCancelBottom"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/btn_cancel"
-                android:textColor="@color/text_primary"
-                android:backgroundTint="@color/bg_input"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:layout_marginEnd="8dp"
-                style="@style/Widget.MaterialComponents.Button"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"/>
-
-            <!-- Save Button -->
-            <Button
-                android:id="@+id/btnSaveBottom"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/btn_save"
-                android:textColor="@color/black"
-                android:backgroundTint="@color/colorPrimary"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                style="@style/Widget.MaterialComponents.Button"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"/>
-        </LinearLayout>
+            android:layout_marginBottom="4dp"
+            android:text="@string/hint_autosave_enabled"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"/>
 
         <!-- Footer / Version & Author Info -->
         <LinearLayout

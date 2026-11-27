@@ -170,4 +170,25 @@
     <string name="notification_channel_desc">Continuous night glucose monitoring service</string>
     <string name="notification_service_title">DiaNight Active</string>
     <string name="notification_service_text">Night glucose monitoring &amp; alarms active</string>
+
+    <!-- Multi-source Priority, Nightscout, Polling & Auto-save Strings -->
+    <string name="label_source_broadcast_priority">1. Local Broadcast (xDrip+ on this phone)</string>
+    <string name="label_source_nightscout_priority">2. Nightscout (cloud server)</string>
+    <string name="label_source_wifi_priority">3. Wi-Fi (xDrip+ master web service)</string>
+    <string name="hint_source_priority">Priority order: Broadcast → Nightscout → Wi-Fi. Lower-priority sources are queried only if higher-priority sources have no fresh data, saving master battery.</string>
+    <string name="label_poll_interval">Poll interval (sec)</string>
+    <string name="label_stale_threshold">Stale threshold (min)</string>
+    <string name="label_nightscout_config">Nightscout Setup</string>
+    <string name="label_nightscout_url">Nightscout URL (e.g., https://my.ns.org)</string>
+    <string name="label_nightscout_secret">Nightscout API Secret (optional)</string>
+    <string name="btn_test_nightscout">Test Nightscout Connection</string>
+    <string name="hint_autosave_enabled">All settings are saved automatically as you edit</string>
+    <string name="msg_at_least_one_source">At least one data source must be enabled</string>
+    <string name="msg_invalid_nightscout_url">Please enter a valid Nightscout URL</string>
+    <string name="msg_invalid_poll_interval">Polling interval must be at least 15 seconds</string>
+    <string name="msg_invalid_stale_threshold">Stale threshold must be at least 1 minute</string>
+    <string name="dialog_test_nightscout_msg">Connecting to Nightscout at %1$s...</string>
+    <string name="dialog_test_nightscout_success_msg">Connection with Nightscout established successfully!\n\nResponse code: 200 OK</string>
+    <string name="dialog_test_nightscout_auth_msg">Nightscout rejected the request (401/403).\n\nCheck your API Secret or access token (?token=...).</string>
+    <string name="dialog_test_nightscout_error_msg">Failed to connect to Nightscout:\n%1$s\n\nError details:\n%2$s</string>
 </resources>

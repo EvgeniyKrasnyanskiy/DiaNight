@@ -1,35 +1,36 @@
-# План реализации: DiaNight
+# [Completed] План реализации: Приоритет источников данных (Broadcast → Nightscout → Wi-Fi), интервал опроса и автосохранение настроек
 
-## 1. Завершённые задачи [Completed]
-1. **[Completed] Цвета глюкозы по стандарту AGP/TIR (из проекта TIRUp):**
-   - Внедрена 6-полосная шкала международного клинического консенсуса (Battelino et al., 2019).
-   - Единый метод `MainActivity.getGlucoseStandardColor(double valueMmol)`.
-   - Обновлен предпросмотр в `SettingsActivity` и `activity_settings.xml`.
-2. **[Completed] Исправление тихого автопоиска подсети без API Secret:**
-   - Устранена блокировка, запрещавшая запуск фонового поиска мастера, если пароль пустой.
-   - Заголовок `api-secret` теперь добавляется только при наличии ключа.
-   - В `SettingsActivity` снято требование обязательного ввода пароля для поиска сервера.
-3. **[Completed] Надежный выбор камеры со вспышкой (Hardware Torch):**
-   - Добавлен метод `getFlashCameraId()` с проверкой `CameraCharacteristics.FLASH_INFO_AVAILABLE`.
-   - Реализован приоритет основной (задней) камеры при наличии нескольких модулей.
-4. **[Completed] Внедрение Foreground Service (`NightMonitorService`):**
-   - Добавлен сервис `NightMonitorService` с тихим постоянным уведомлением низкого приоритета (`IMPORTANCE_LOW`).
-   - Защита ночного процесса мониторинга от уничтожения системой (Low Memory Killer).
-   - Добавлены разрешения `FOREGROUND_SERVICE` и `POST_NOTIFICATIONS`.
-5. **[Completed] Исправление флага `BatteryReceiver`:**
-   - Переключен на `Context.RECEIVER_EXPORTED` для системного интента `ACTION_BATTERY_CHANGED` на API 33+, устраняя риск падения на API 34+.
+## Цель
+Пересобрать приложение DiaNight с поддержкой выбора и приоритета источников данных (`Broadcast → Nightscout → Wi-Fi xDrip+`), контролем свежести данных (по умолчанию 2 мин), настраиваемым интервалом опроса (по умолчанию 60 сек), индикатором активного источника на главном экране, оптимизацией сетевых запросов (`/pebble`-first, умный `WifiLock`) и автосохранением настроек.
 
-6. **[Completed] Минимизация размера APK (R8, ProGuard, resConfigs):**
-   - Включены `minifyEnabled true`, `shrinkResources true`, `resConfigs "en", "ru"`.
-   - Настроен `app/proguard-rules.pro` с сохранением `com.diaclock.nightstand.**`, Gson и OkHttp 3.12 (полная совместимость с Android 4.4 KitKat / minSdk 19).
-   - Размер релиза сокращен с 5.14 МБ до 1.73 МБ (на 65%).
-7. **[Completed] Масштабирование часов и сахара в альбомном режиме (1.3x):**
-   - В `MainActivity.java` в методах `adjustTextSizes()` и `adjustGlucoseAndIoBTextSizes()` применен множитель `1.3f` для времени, двоеточия, сахара и IoB в ландшафтном режиме.
-8. **[Completed] Релизная сборка и проверка:**
-   - Собран релиз `DiaNight-v1.1.79-release.apk` (1.73 МБ), проверен single-dex и ресурсы.
-9. **[Completed] Дополнительное масштабирование в ландшафтном режиме (1.495x / +15%):**
-   - Увеличен коэффициент до `1.495f` в `MainActivity.java` с динамической защитой безопасных полей экрана для OLED pixel-shift (±16px).
-10. **[Completed] Регулировка яркости свайпом по экрану и HUD:**
-   - Реализован вертикальный свайп с плавным диммированием от 1% до 100%, всплывающий индикатор `layoutBrightnessHud` и сохранение в настройки.
-11. **[Completed] Формирование Roadmap проекта:**
-   - Создан документ `.agent/docs/ROADMAP.md` со стратегическими направлениями развития (предиктивная гипо, глубокий красный ночной OLED режим, Flip-to-Snooze, Proximity Dimmer).
+## Шаги реализации
+
+1. **Создать `GlucoseDataFetcher.java`**
+   - Инкапсулировать сетевой опрос Nightscout и Wi-Fi xDrip+.
+   - Реализовать стратегию `/pebble`-first (1 запрос для SGV + тренд + время + IoB) с fallback на `/api/v1/entries/sgv.json?count=1` (для Nightscout) и `/sgv.json` (для Wi-Fi xDrip+).
+   - Проверять свежесть данных по timestamp (`datetime` / `date`) с порогом `staleThresholdMs` (по умолчанию 2 мин).
+   - Поддержать приоритетный fallback `Nightscout → Wi-Fi`: если Nightscout недоступен или его данные устарели, автоматически обращаться к Wi-Fi мастеру.
+   - Добавить отмену активных HTTP-запросов при паузе/смене настроек.
+
+2. **Обновить `MainActivity.java` и `activity_main.xml`**
+   - Загружать флаги источников (`source_broadcast_enabled`, `source_nightscout_enabled`, `source_wifi_enabled`) с миграцией из legacy `data_source`, а также `nightscout_url`, `nightscout_api_secret`, `poll_interval_seconds` (дефолт 60), `stale_threshold_minutes` (дефолт 2).
+   - Отслеживать `lastBroadcastTimestamp` при получении `com.eveningoutpost.dexdrip.BgEstimate`.
+   - В `networkRunnable`: если Broadcast включён и его данные свежие (`now - lastBroadcastTimestamp <= staleThresholdMs`), пропускать сетевые запросы и показывать `LOC`; иначе запускать `GlucoseDataFetcher` (Nightscout → Wi-Fi).
+   - Добавить ненавязчивый индикатор активного источника (`tvDataSourceBadge`: `LOC` / `NS` / `Wi-Fi`) в `statusBarContainer` в `activity_main.xml`.
+   - Удерживать `WifiLock` только когда включён хотя бы один сетевой источник и выключен режим ночника.
+   - Автопоиск подсети запускать только если включён источник Wi-Fi и именно Wi-Fi не отвечает.
+
+3. **Обновить `SettingsActivity.java` и `activity_settings.xml`**
+   - Заменить `RadioGroup` выбора источника на 3 `CheckBox` с явным порядком приоритета:
+     1. Локальный Broadcast (приоритет 1)
+     2. Nightscout (приоритет 2)
+     3. Wi-Fi xDrip+ (приоритет 3)
+   - Добавить секцию настроек Nightscout: URL, API Secret, кнопка «Проверить связь».
+   - Добавить поля «Интервал опроса (секунды)» (по умолчанию 60) и «Порог устаревания данных (минуты)» (по умолчанию 2).
+   - Убрать нижние кнопки «Сохранить» и «Отмена», оставить кнопку «Применить» в блоке источников/подключения.
+   - Реализовать автосохранение всех настроек при изменении и в `onPause()` с валидацией числовых/временных полей без перезаписи некорректными промежуточными значениями.
+
+4. **Локализация, документация и сборка**
+   - Обновить `app/src/main/res/values/strings.xml` и `app/src/main/res/values-ru/strings.xml`.
+   - Обновить `CHANGELOG.md`.
+   - Собрать и проверить APK (`gradlew assembleRelease` / `assembleDebug`), запустить unit-тесты.

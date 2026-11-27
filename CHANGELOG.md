@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.1.81] - 2026-11-27
+
+### Added
+- **Multi-Source Priority Fallback (`Broadcast → Nightscout → Wi-Fi xDrip+`)**:
+  - Added selectable data sources with optimal priority chain: local Broadcast is checked first, then cloud Nightscout, and Wi-Fi xDrip+ master is only contacted if higher-priority sources have no fresh data — significantly reducing Wi-Fi wakeups and battery drain on the master phone.
+  - Added Nightscout configuration card (URL with `?token=...` support, optional SHA-1 `api-secret`, and dedicated "Test Nightscout Connection" button).
+  - Added configurable **Polling Interval** (default `60s`, min `15s`, previously hardcoded `30s`) and **Data Staleness Threshold** (default `2 min`, min `1 min`).
+  - Added subtle active data source badge (`LOC` / `NS` / `Wi-Fi`, with `⚠` on stale readings) to the main screen status bar.
+  - Extracted `GlucoseDataFetcher` with `/pebble`-first single-request optimization (SGV + trend + timestamp + IoB in one HTTP call) and automatic fallback to SGV endpoint.
+
+### Changed
+- **Instant Auto-Save in Settings**:
+  - Removed bottom Save/Cancel buttons; all settings are now saved automatically on change and on pause without overwriting saved values during incomplete input.
+  - Kept the "Apply Settings" button inside the Data Source card for quick validation and return to the main screen.
+- **Smart `WifiLock` & Auto-Discovery**:
+  - `WifiLock` is now held only when at least one network source is enabled and nightlight mode is off.
+  - Silent subnet auto-discovery runs only when Wi-Fi source is enabled and fails.
+
 ## [v1.1.80] - 2026-10-11
 
 ### Added

@@ -58,8 +58,9 @@ public class MainActivity extends AppCompatActivity {
     private ImageView ivNetworkWarning;
     private ImageView ivExit;
     
-    // New UI elements for IoB & Battery
+    // New UI elements for IoB, Battery & Active Source Badge
     private TextView tvIoB;
+    private TextView tvDataSourceBadge;
     private View ivBatteryContainer;
     private ImageView ivBatteryIcon;
     private TextView tvBatteryPercent;
@@ -135,26 +136,37 @@ public class MainActivity extends AppCompatActivity {
     // Toggle state variables
     private boolean isShowingTime = true;
     private int toggleIntervalSeconds = 5;
-    private String dataSource = "network";
+    private boolean sourceBroadcastEnabled = false;
+    private boolean sourceNightscoutEnabled = false;
+    private boolean sourceWifiEnabled = true;
     private boolean isReceiverRegistered = false;
     private boolean nightlightMode = false;
-    
-    // Network variables
+
+    // Network & Nightscout variables
     private String serverIp = "192.168.0.111";
     private String apiSecret = "FBB9F80F9AC22E5B15F6DA1FFE599E14";
-    private String cachedSecretHash = null; // Cached SHA-1 hash of apiSecret
+    private String cachedSecretHash = null; // Cached SHA-1 hash of Wi-Fi xDrip apiSecret
+    private String nightscoutUrl = "";
+    private String nightscoutApiSecret = "";
+    private String cachedNightscoutSecretHash = null; // Cached SHA-1 hash of Nightscout apiSecret
+    private final GlucoseDataFetcher dataFetcher = new GlucoseDataFetcher();
+    private volatile long lastBroadcastTimestampMs = 0L;
+    private String activeSourceTag = "";
     private double lastGlucoseMmol = -1.0;
     private String lastDirection = "";
     private volatile boolean hasConnectionError = false;
-    
+
     // Automatic background master IP discovery fields
     private volatile int consecutiveNetworkFailures = 0;
     private volatile boolean isAutoScanningSubnet = false;
-    
-    // Adaptive polling interval with exponential backoff on errors
-    private volatile long networkPollInterval = 30000L; // 30 seconds base (CGMs update every 1-5 min)
-    private static final long BASE_POLL_INTERVAL = 30000L;
-    private static final long MAX_POLL_INTERVAL = 120000L; // 2 minutes max backoff
+
+    // Adaptive polling interval with exponential backoff on errors (default 60s)
+    private static final int DEFAULT_POLL_INTERVAL_SECONDS = 60;
+    private static final int DEFAULT_STALE_THRESHOLD_MINUTES = 2;
+    private volatile long basePollIntervalMs = DEFAULT_POLL_INTERVAL_SECONDS * 1000L;
+    private volatile long maxPollIntervalMs = 300_000L;
+    private volatile long networkPollInterval = DEFAULT_POLL_INTERVAL_SECONDS * 1000L;
+    private volatile long staleThresholdMs = DEFAULT_STALE_THRESHOLD_MINUTES * 60_000L;
     
     // New features state
     private boolean alarmUseFlash = false;
@@ -378,21 +390,19 @@ public class MainActivity extends AppCompatActivity {
             layoutTime.setVisibility(View.VISIBLE);
             ivAlarmBell.setVisibility(View.GONE);
             ivNetworkWarning.setVisibility(View.GONE);
+            if (tvDataSourceBadge != null) tvDataSourceBadge.setVisibility(View.GONE);
         } else {
-            if ("broadcast".equals(dataSource)) {
+            if (sourceBroadcastEnabled) {
                 registerXdripReceiver();
-                if (lastGlucoseMmol > 0) {
-                    tvGlucose.setText(String.format(Locale.US, "%.1f%s", lastGlucoseMmol, getTrendArrow(lastDirection)));
-                } else {
-                    tvGlucose.setText(getString(R.string.msg_waiting));
-                }
+            }
+            if (lastGlucoseMmol > 0) {
+                tvGlucose.setText(String.format(Locale.US, "%.1f%s", lastGlucoseMmol, getTrendArrow(lastDirection)));
+            } else {
+                tvGlucose.setText(isAnyNetworkSourceEnabled() ? "---" : getString(R.string.msg_waiting));
+            }
+            if (!isAnyNetworkSourceEnabled()) {
                 tvIoB.setVisibility(View.GONE);
             } else {
-                if (lastGlucoseMmol > 0) {
-                    tvGlucose.setText(String.format(Locale.US, "%.1f%s", lastGlucoseMmol, getTrendArrow(lastDirection)));
-                } else {
-                    tvGlucose.setText("---");
-                }
                 startNetworkPolling();
             }
         }
@@ -417,7 +427,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        acquireWifiLock();
 
         // Resume breathing animation
         if (breathingAnimator != null) {
@@ -445,25 +454,37 @@ public class MainActivity extends AppCompatActivity {
         pixelShiftHandler.removeCallbacks(pixelShiftRunnable);
         pixelShiftHandler.post(pixelShiftRunnable);
 
-        String oldSource = dataSource;
+        boolean oldBroadcast = sourceBroadcastEnabled;
+        boolean oldNightscout = sourceNightscoutEnabled;
+        boolean oldWifi = sourceWifiEnabled;
         boolean oldNightlight = nightlightMode;
         loadSettings();
         updateAlarmBellIcon();
         applyTextColor();
-        
+
         if (nightlightMode) {
             // Unregister/Stop monitoring to save battery
             unregisterXdripReceiver();
+            dataFetcher.cancel();
             mainHandler.removeCallbacks(networkRunnable);
             mainHandler.removeCallbacks(toggleRunnable);
-            
+            releaseWifiLock();
+
             // Adjust layouts and icons
             layoutGlucose.setVisibility(View.GONE);
             layoutTime.setVisibility(View.VISIBLE);
             ivAlarmBell.setVisibility(View.GONE);
             ivNetworkWarning.setVisibility(View.GONE);
+            if (tvDataSourceBadge != null) tvDataSourceBadge.setVisibility(View.GONE);
             stopAlarmSound();
         } else {
+            // Hold WifiLock only when a network data source is enabled
+            if (isAnyNetworkSourceEnabled()) {
+                acquireWifiLock();
+            } else {
+                releaseWifiLock();
+            }
+
             // Restore alarm bell visibility (warning only if there is a network error)
             ivAlarmBell.setVisibility(View.VISIBLE);
             if (hasConnectionError) {
@@ -471,34 +492,41 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 ivNetworkWarning.setVisibility(View.GONE);
             }
-            
+            if (tvDataSourceBadge != null && !activeSourceTag.isEmpty()) {
+                tvDataSourceBadge.setVisibility(View.VISIBLE);
+            }
+
             // Restart the toggle cycle when app is active
             startToggleCycle();
-            
-            // Resume/Start polling or broadcast receiver if needed
-            if (!dataSource.equals(oldSource) || oldNightlight) {
-                Log.d(TAG, "Data source or nightlight mode changed");
-                if ("broadcast".equals(dataSource)) {
-                    mainHandler.removeCallbacks(networkRunnable);
-                    registerXdripReceiver();
-                    tvGlucose.setText(getString(R.string.msg_waiting));
-                    tvIoB.setVisibility(View.GONE);
-                } else {
-                    unregisterXdripReceiver();
-                    mainHandler.removeCallbacks(networkRunnable);
-                    mainHandler.post(networkRunnable);
-                }
+
+            boolean sourcesChanged = (oldBroadcast != sourceBroadcastEnabled)
+                    || (oldNightscout != sourceNightscoutEnabled)
+                    || (oldWifi != sourceWifiEnabled)
+                    || oldNightlight;
+
+            if (sourceBroadcastEnabled) {
+                registerXdripReceiver();
             } else {
-                if ("broadcast".equals(dataSource)) {
-                    registerXdripReceiver();
-                } else {
-                    unregisterXdripReceiver();
-                    mainHandler.removeCallbacks(networkRunnable);
-                    mainHandler.post(networkRunnable);
+                unregisterXdripReceiver();
+            }
+
+            if (isAnyNetworkSourceEnabled()) {
+                if (sourcesChanged) {
+                    consecutiveNetworkFailures = 0;
+                    networkPollInterval = basePollIntervalMs;
                 }
+                mainHandler.removeCallbacks(networkRunnable);
+                mainHandler.post(networkRunnable);
+            } else {
+                dataFetcher.cancel();
+                mainHandler.removeCallbacks(networkRunnable);
+                if (sourcesChanged && lastGlucoseMmol <= 0) {
+                    tvGlucose.setText(getString(R.string.msg_waiting));
+                }
+                tvIoB.setVisibility(View.GONE);
             }
         }
-        
+
         // Ensure foreground monitoring service is active
         NightMonitorService.start(this);
 
@@ -527,6 +555,7 @@ public class MainActivity extends AppCompatActivity {
         mainHandler.removeCallbacks(timeRunnable);
         mainHandler.removeCallbacks(networkRunnable);
         mainHandler.removeCallbacks(toggleRunnable);
+        dataFetcher.cancel();
         pixelShiftHandler.removeCallbacks(pixelShiftRunnable);
         inactivityHandler.removeCallbacks(inactivityRunnable);
         stopFlashBlinking();
@@ -562,6 +591,7 @@ public class MainActivity extends AppCompatActivity {
         unregisterXdripReceiver();
 
         // Clean up OkHttp resources
+        dataFetcher.cancel();
         HttpClientProvider.getClient().dispatcher().cancelAll();
 
         // Stop foreground monitoring service
@@ -611,6 +641,7 @@ public class MainActivity extends AppCompatActivity {
         ivExit = findViewById(R.id.ivExit);
         
         tvIoB = findViewById(R.id.tvIoB);
+        tvDataSourceBadge = findViewById(R.id.tvDataSourceBadge);
         ivBatteryContainer = findViewById(R.id.ivBatteryContainer);
         ivBatteryIcon = findViewById(R.id.ivBatteryIcon);
         tvBatteryPercent = findViewById(R.id.tvBatteryPercent);
@@ -624,14 +655,47 @@ public class MainActivity extends AppCompatActivity {
         tvBrightnessHudValue = findViewById(R.id.tvBrightnessHudValue);
     }
 
+    private boolean isAnyNetworkSourceEnabled() {
+        return sourceNightscoutEnabled || sourceWifiEnabled;
+    }
+
     private void loadSettings() {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         serverIp = prefs.getString("ip_address", "192.168.0.111");
         apiSecret = prefs.getString("api_secret", "FBB9F80F9AC22E5B15F6DA1FFE599E14");
+        nightscoutUrl = prefs.getString("nightscout_url", "");
+        nightscoutApiSecret = prefs.getString("nightscout_api_secret", "");
         toggleIntervalSeconds = prefs.getInt("toggle_interval", 5);
         alarmEnabled = prefs.getBoolean("alarm_enabled", true);
         textColor = prefs.getInt("text_color", Color.WHITE);
-        dataSource = prefs.getString("data_source", "network");
+
+        // Load multi-source flags with backward-compatible migration from legacy data_source
+        if (prefs.contains("source_broadcast_enabled")
+                || prefs.contains("source_nightscout_enabled")
+                || prefs.contains("source_wifi_enabled")) {
+            sourceBroadcastEnabled = prefs.getBoolean("source_broadcast_enabled", false);
+            sourceNightscoutEnabled = prefs.getBoolean("source_nightscout_enabled", false);
+            sourceWifiEnabled = prefs.getBoolean("source_wifi_enabled", true);
+        } else {
+            String legacySource = prefs.getString("data_source", "network");
+            sourceBroadcastEnabled = "broadcast".equals(legacySource);
+            sourceNightscoutEnabled = false;
+            sourceWifiEnabled = !"broadcast".equals(legacySource);
+        }
+        if (!sourceBroadcastEnabled && !sourceNightscoutEnabled && !sourceWifiEnabled) {
+            sourceWifiEnabled = true;
+        }
+
+        int pollSec = prefs.getInt("poll_interval_seconds", DEFAULT_POLL_INTERVAL_SECONDS);
+        if (pollSec < 15) pollSec = 15;
+        basePollIntervalMs = pollSec * 1000L;
+        maxPollIntervalMs = Math.max(basePollIntervalMs * 4L, 300_000L);
+        networkPollInterval = basePollIntervalMs;
+
+        int staleMin = prefs.getInt("stale_threshold_minutes", DEFAULT_STALE_THRESHOLD_MINUTES);
+        if (staleMin < 1) staleMin = 1;
+        staleThresholdMs = staleMin * 60_000L;
+
         nightlightMode = prefs.getBoolean("nightlight_mode", false);
         alarmUseFlash = prefs.getBoolean("alarm_use_flash", false);
         enableAutoClose = prefs.getBoolean("enable_autoclose", false);
@@ -644,7 +708,7 @@ public class MainActivity extends AppCompatActivity {
         if (savedBrightnessPercent >= 1 && savedBrightnessPercent <= 100) {
             applyScreenBrightness(savedBrightnessPercent / 100.0f);
         }
-        
+
         alarmSoundType = prefs.getString("alarm_sound_type", null);
         alarmUriStr = prefs.getString("alarm_uri", null);
         if (alarmSoundType == null) {
@@ -656,10 +720,12 @@ public class MainActivity extends AppCompatActivity {
                 alarmSoundType = SoundGenerator.SOUND_BUILTIN_PULSE;
             }
         }
-        
-        // Cache SHA-1 hash of API secret to avoid recomputing on every request
+
+        // Cache SHA-1 hashes of API secrets to avoid recomputing on every request
         cachedSecretHash = (apiSecret != null && !apiSecret.trim().isEmpty())
                 ? CryptoUtils.computeSHA1(apiSecret) : null;
+        cachedNightscoutSecretHash = (nightscoutApiSecret != null && !nightscoutApiSecret.trim().isEmpty())
+                ? CryptoUtils.computeSHA1(nightscoutApiSecret) : null;
     }
 
     private void setupListeners() {
@@ -868,12 +934,23 @@ public class MainActivity extends AppCompatActivity {
         mainHandler.postDelayed(toggleRunnable, toggleIntervalSeconds * 1000L);
     }
 
-    // 4. Nightscout / xDrip Network Integration with adaptive polling interval
+    // 4. Multi-Source Polling (Broadcast -> Nightscout -> Wi-Fi xDrip+) with adaptive interval
     private final Runnable networkRunnable = new Runnable() {
         @Override
         public void run() {
-            if ("network".equals(dataSource) && !isActivityDestroyed) {
-                fetchGlucoseData();
+            if (isAnyNetworkSourceEnabled() && !nightlightMode && !isActivityDestroyed) {
+                boolean broadcastFresh = sourceBroadcastEnabled
+                        && lastBroadcastTimestampMs > 0
+                        && (System.currentTimeMillis() - lastBroadcastTimestampMs) <= staleThresholdMs;
+
+                if (broadcastFresh) {
+                    Log.d(TAG, "Local broadcast data is fresh; skipping network poll.");
+                    networkPollInterval = basePollIntervalMs;
+                    consecutiveNetworkFailures = 0;
+                    updateDataSourceBadge(GlucoseDataFetcher.SOURCE_BROADCAST, false);
+                } else {
+                    fetchGlucoseData();
+                }
                 mainHandler.postDelayed(this, networkPollInterval);
             }
         }
@@ -881,295 +958,104 @@ public class MainActivity extends AppCompatActivity {
 
     private void startNetworkPolling() {
         mainHandler.removeCallbacks(networkRunnable);
-        if ("network".equals(dataSource)) {
+        if (isAnyNetworkSourceEnabled() && !nightlightMode) {
             mainHandler.post(networkRunnable);
         }
     }
 
     /**
-     * Returns the cached SHA-1 hash of the API secret.
-     * The hash is computed once in loadSettings() and cached in cachedSecretHash.
+     * Returns the cached SHA-1 hash of the Wi-Fi xDrip API secret.
      */
     private String getSecretHash() {
         return cachedSecretHash;
     }
 
+    private void updateDataSourceBadge(final String sourceTag, final boolean isStale) {
+        activeSourceTag = sourceTag != null ? sourceTag : "";
+        if (isActivityDestroyed || tvDataSourceBadge == null) return;
+        runOnUiThread(() -> {
+            if (isActivityDestroyed || tvDataSourceBadge == null) return;
+            if (nightlightMode || activeSourceTag.isEmpty()) {
+                tvDataSourceBadge.setVisibility(View.GONE);
+                return;
+            }
+            tvDataSourceBadge.setText(isStale ? (activeSourceTag + " ⚠") : activeSourceTag);
+            tvDataSourceBadge.setTextColor(getResources().getColor(
+                    isStale ? R.color.color_warning_orange : R.color.text_secondary));
+            tvDataSourceBadge.setVisibility(View.VISIBLE);
+            tvDataSourceBadge.setAlpha(isControlsFaded ? 0.35f : 0.85f);
+        });
+    }
+
     private void fetchGlucoseData() {
-        if (serverIp == null || serverIp.trim().isEmpty()) {
-            showNetworkWarning(true);
-            return;
-        }
+        GlucoseDataFetcher.Config config = new GlucoseDataFetcher.Config(
+                sourceNightscoutEnabled,
+                nightscoutUrl,
+                cachedNightscoutSecretHash,
+                sourceWifiEnabled,
+                serverIp,
+                cachedSecretHash,
+                staleThresholdMs
+        );
 
-        String url = "http://" + serverIp.trim() + ":17580/sgv.json";
-        
-        try {
-            Request.Builder requestBuilder = new Request.Builder().url(url);
-            if (cachedSecretHash != null) {
-                requestBuilder.addHeader("api-secret", cachedSecretHash);
+        dataFetcher.fetch(config, new GlucoseDataFetcher.FetchCallback() {
+            @Override
+            public void onFreshReading(@NonNull GlucoseDataFetcher.GlucoseReading reading) {
+                networkPollInterval = basePollIntervalMs;
+                consecutiveNetworkFailures = 0;
+                if (isActivityDestroyed) return;
+                runOnUiThread(() -> applyGlucoseReading(reading, false));
             }
-            Request request = requestBuilder.build();
 
-            HttpClientProvider.getClient().newCall(request).enqueue(new Callback() {
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    Log.e(TAG, "Network call failed: " + e.getMessage());
-                    networkPollInterval = Math.min(networkPollInterval * 2, MAX_POLL_INTERVAL);
-                    consecutiveNetworkFailures++;
-                    if (consecutiveNetworkFailures >= 3 && !isAutoScanningSubnet) {
-                        triggerSilentSubnetAutoDiscovery();
-                    }
-                    if (consecutiveNetworkFailures >= 10 && wifiWatchdogEnabled) {
-                        triggerWifiWatchdogRestart();
-                    }
-                    if (isActivityDestroyed) return;
-                    runOnUiThread(() -> {
-                        boolean showWarning = consecutiveNetworkFailures >= 10;
-                        showNetworkWarning(showWarning);
-                        if (showWarning) {
-                            tvGlucose.setText("---");
-                            tvIoB.setVisibility(View.GONE);
-                            adjustGlucoseAndIoBTextSizes();
-                            applyTextColor();
-                        }
-                    });
+            @Override
+            public void onStaleReading(@NonNull GlucoseDataFetcher.GlucoseReading reading) {
+                networkPollInterval = basePollIntervalMs;
+                consecutiveNetworkFailures = 0;
+                if (isActivityDestroyed) return;
+                runOnUiThread(() -> applyGlucoseReading(reading, true));
+            }
+
+            @Override
+            public void onFailure(boolean wifiAttemptedAndFailed) {
+                networkPollInterval = Math.min(networkPollInterval * 2, maxPollIntervalMs);
+                consecutiveNetworkFailures++;
+                if (wifiAttemptedAndFailed && sourceWifiEnabled && consecutiveNetworkFailures >= 3 && !isAutoScanningSubnet) {
+                    triggerSilentSubnetAutoDiscovery();
                 }
-
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    try {
-                        if (!response.isSuccessful()) {
-                            networkPollInterval = Math.min(networkPollInterval * 2, MAX_POLL_INTERVAL);
-                            consecutiveNetworkFailures++;
-                            if (consecutiveNetworkFailures >= 3 && !isAutoScanningSubnet) {
-                                triggerSilentSubnetAutoDiscovery();
-                            }
-                            if (consecutiveNetworkFailures >= 10 && wifiWatchdogEnabled) {
-                                triggerWifiWatchdogRestart();
-                            }
-                            if (isActivityDestroyed) return;
-                            runOnUiThread(() -> {
-                                boolean showWarning = consecutiveNetworkFailures >= 10;
-                                showNetworkWarning(showWarning);
-                                if (showWarning) {
-                                    tvGlucose.setText("---");
-                                    tvIoB.setVisibility(View.GONE);
-                                    adjustGlucoseAndIoBTextSizes();
-                                    applyTextColor();
-                                }
-                            });
-                            return;
-                        }
-
-                        String responseBody = response.body() != null ? response.body().string() : "";
-                        try {
-                            JsonElement element = JsonParser.parseString(responseBody);
-                            int sgv = 0;
-                            String direction = "";
-                            
-                            if (element.isJsonArray()) {
-                                JsonArray array = element.getAsJsonArray();
-                                if (array.size() > 0) {
-                                    com.google.gson.JsonObject obj = array.get(0).getAsJsonObject();
-                                    sgv = obj.get("sgv").getAsInt();
-                                    if (obj.has("direction")) {
-                                        direction = obj.get("direction").getAsString();
-                                    }
-                                }
-                            } else if (element.isJsonObject()) {
-                                com.google.gson.JsonObject obj = element.getAsJsonObject();
-                                sgv = obj.get("sgv").getAsInt();
-                                if (obj.has("direction")) {
-                                    direction = obj.get("direction").getAsString();
-                                }
-                            }
-
-                            if (sgv > 0) {
-                                final double glucoseMmol = sgv / 18.0;
-                                final String finalDirection = direction;
-                                
-                                // Reset polling interval and failure count on successful data fetch
-                                networkPollInterval = BASE_POLL_INTERVAL;
-                                consecutiveNetworkFailures = 0;
-                                
-                                if (isActivityDestroyed) return;
-                                runOnUiThread(() -> {
-                                    // Update shared state on UI thread to prevent data races
-                                    lastGlucoseMmol = glucoseMmol;
-                                    lastDirection = finalDirection;
-                                    showNetworkWarning(false);
-                                    tvGlucose.setText(String.format(Locale.US, "%.1f%s", glucoseMmol, getTrendArrow(finalDirection)));
-                                    adjustGlucoseAndIoBTextSizes();
-                                    applyTextColor();
-                                    checkAlarms(glucoseMmol);
-                                });
-                                
-                                // Fetch IoB from the separate /pebble endpoint
-                                fetchIoBData();
-                            } else {
-                                consecutiveNetworkFailures++;
-                                if (isActivityDestroyed) return;
-                                runOnUiThread(() -> {
-                                    boolean showWarning = consecutiveNetworkFailures >= 10;
-                                    showNetworkWarning(showWarning);
-                                    if (showWarning) {
-                                        tvGlucose.setText("---");
-                                        tvIoB.setVisibility(View.GONE);
-                                        adjustGlucoseAndIoBTextSizes();
-                                        applyTextColor();
-                                    }
-                                });
-                            }
-                        } catch (Exception e) {
-                            Log.e(TAG, "Parsing SGV JSON failed: " + e.getMessage());
-                            consecutiveNetworkFailures++;
-                            if (isActivityDestroyed) return;
-                            runOnUiThread(() -> {
-                                boolean showWarning = consecutiveNetworkFailures >= 10;
-                                showNetworkWarning(showWarning);
-                                if (showWarning) {
-                                    tvGlucose.setText("---");
-                                    tvIoB.setVisibility(View.GONE);
-                                    adjustGlucoseAndIoBTextSizes();
-                                    applyTextColor();
-                                }
-                            });
-                        }
-                    } finally {
-                        response.close();
-                    }
+                if (consecutiveNetworkFailures >= 10 && wifiWatchdogEnabled) {
+                    triggerWifiWatchdogRestart();
                 }
-            });
-        } catch (IllegalArgumentException e) {
-            Log.e(TAG, "Invalid server URL: " + e.getMessage());
-            showNetworkWarning(true);
-            tvGlucose.setText("---");
-            tvIoB.setVisibility(View.GONE);
-            adjustGlucoseAndIoBTextSizes();
-            applyTextColor();
-        }
+                if (isActivityDestroyed) return;
+                runOnUiThread(() -> {
+                    boolean showWarning = consecutiveNetworkFailures >= 3;
+                    showNetworkWarning(showWarning);
+                    if (consecutiveNetworkFailures >= 10) {
+                        tvGlucose.setText("---");
+                        tvIoB.setVisibility(View.GONE);
+                        adjustGlucoseAndIoBTextSizes();
+                        applyTextColor();
+                    }
+                });
+            }
+        });
     }
 
-    /**
-     * Fetches IoB (Insulin on Board) from the xDrip+ /pebble endpoint.
-     * The /sgv.json endpoint does NOT include IoB data.
-     * The /pebble response structure: {"status":[{"iob":{"iob":1.25,...},...}],...}
-     */
-    private void fetchIoBData() {
-        String pebbleUrl = "http://" + serverIp.trim() + ":17580/pebble";
-        
-        try {
-            Request.Builder requestBuilder = new Request.Builder().url(pebbleUrl);
-            if (cachedSecretHash != null) {
-                requestBuilder.addHeader("api-secret", cachedSecretHash);
-            }
-            Request pebbleRequest = requestBuilder.build();
-
-            HttpClientProvider.getClient().newCall(pebbleRequest).enqueue(new Callback() {
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    Log.d(TAG, "Pebble IoB fetch failed: " + e.getMessage());
-                    if (isActivityDestroyed) return;
-                    runOnUiThread(() -> tvIoB.setVisibility(View.GONE));
-                }
-
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    try {
-                        if (!response.isSuccessful()) {
-                            if (!isActivityDestroyed) {
-                                runOnUiThread(() -> tvIoB.setVisibility(View.GONE));
-                            }
-                            return;
-                        }
-
-                        String body = response.body() != null ? response.body().string() : "";
-                        Log.d(TAG, "Pebble raw response (first 500 chars): " + body.substring(0, Math.min(body.length(), 500)));
-                        try {
-                            com.google.gson.JsonObject root = JsonParser.parseString(body).getAsJsonObject();
-                            double iobValue = -1.0;
-                            
-                            // Parse IoB from: {"bgs":[{"iob":"0,64",...}]} (Standard Nightscout Pebble format in xDrip+)
-                            if (root.has("bgs")) {
-                                JsonArray bgsArray = root.getAsJsonArray("bgs");
-                                if (bgsArray.size() > 0) {
-                                    com.google.gson.JsonObject bgsObj = bgsArray.get(0).getAsJsonObject();
-                                    if (bgsObj.has("iob")) {
-                                        iobValue = parseIobElement(bgsObj.get("iob"));
-                                    }
-                                }
-                            }
-                            
-                            // Fallback to: {"status":[{"iob":{"iob":1.25,...}}]}
-                            if (iobValue < 0 && root.has("status")) {
-                                JsonArray statusArray = root.getAsJsonArray("status");
-                                if (statusArray.size() > 0) {
-                                    com.google.gson.JsonObject statusObj = statusArray.get(0).getAsJsonObject();
-                                    if (statusObj.has("iob")) {
-                                        JsonElement statusIobElement = statusObj.get("iob");
-                                        if (statusIobElement.isJsonObject()) {
-                                            com.google.gson.JsonObject iobObj = statusIobElement.getAsJsonObject();
-                                            if (iobObj.has("iob")) {
-                                                iobValue = parseIobElement(iobObj.get("iob"));
-                                            }
-                                        } else {
-                                            iobValue = parseIobElement(statusIobElement);
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            final double finalIob = iobValue;
-                            if (isActivityDestroyed) return;
-                            runOnUiThread(() -> {
-                                if (finalIob >= 0) {
-                                    tvIoB.setText(String.format(Locale.US, "%.2f", finalIob));
-                                    tvIoB.setVisibility(View.VISIBLE);
-                                    Log.d(TAG, "IoB displayed: " + finalIob);
-                                } else {
-                                    tvIoB.setVisibility(View.GONE);
-                                }
-                                adjustGlucoseAndIoBTextSizes();
-                            });
-                        } catch (Exception e) {
-                            Log.e(TAG, "Parsing Pebble IoB failed: " + e.getMessage());
-                            if (isActivityDestroyed) return;
-                            runOnUiThread(() -> {
-                                tvIoB.setVisibility(View.GONE);
-                                adjustGlucoseAndIoBTextSizes();
-                            });
-                        }
-                    } finally {
-                        response.close();
-                    }
-                }
-            });
-        } catch (IllegalArgumentException e) {
-            Log.e(TAG, "Invalid pebble URL: " + e.getMessage());
+    private void applyGlucoseReading(@NonNull GlucoseDataFetcher.GlucoseReading reading, boolean isStale) {
+        if (isActivityDestroyed) return;
+        lastGlucoseMmol = reading.glucoseMmol;
+        lastDirection = reading.direction;
+        showNetworkWarning(isStale);
+        updateDataSourceBadge(reading.sourceTag, isStale);
+        tvGlucose.setText(String.format(Locale.US, "%.1f%s", reading.glucoseMmol, getTrendArrow(reading.direction)));
+        if (reading.iob >= 0) {
+            tvIoB.setText(String.format(Locale.US, "%.2f", reading.iob));
+            tvIoB.setVisibility(View.VISIBLE);
+        } else {
             tvIoB.setVisibility(View.GONE);
         }
-    }
-
-    /**
-     * Safely parses an IoB JsonElement to double, handling potential localized decimal comma separators (e.g. "0,64").
-     */
-    private double parseIobElement(JsonElement iobElement) {
-        if (iobElement == null || iobElement.isJsonNull()) {
-            return -1.0;
-        }
-        try {
-            if (iobElement.isJsonPrimitive()) {
-                String strValue = iobElement.getAsString().trim();
-                if (strValue.isEmpty()) {
-                    return -1.0;
-                }
-                // Handle European comma decimal separator
-                strValue = strValue.replace(",", ".");
-                return Double.parseDouble(strValue);
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to parse IoB element: " + e.getMessage());
-        }
-        return -1.0;
+        adjustGlucoseAndIoBTextSizes();
+        applyTextColor();
+        checkAlarms(reading.glucoseMmol);
     }
 
     private void acquireWifiLock() {
@@ -1486,11 +1372,14 @@ public class MainActivity extends AppCompatActivity {
                 
                 if (rawBg > 0) {
                     double glucoseMmol = rawBg / 18.0;
+                    lastBroadcastTimestampMs = System.currentTimeMillis();
+                    consecutiveNetworkFailures = 0;
                     lastGlucoseMmol = glucoseMmol;
                     lastDirection = slopeName;
                     
                     runOnUiThread(() -> {
                         showNetworkWarning(false);
+                        updateDataSourceBadge(GlucoseDataFetcher.SOURCE_BROADCAST, false);
                         tvGlucose.setText(String.format(Locale.US, "%.1f%s", glucoseMmol, getTrendArrow(slopeName)));
                         tvIoB.setVisibility(View.GONE); // IOB is not broadcasted, hide it
                         adjustGlucoseAndIoBTextSizes();
@@ -1541,6 +1430,9 @@ public class MainActivity extends AppCompatActivity {
             ivBatteryContainer.animate().alpha(1.0f).setDuration(200).start();
             ivAlarmBell.animate().alpha(1.0f).setDuration(200).start();
             ivExit.animate().alpha(1.0f).setDuration(200).start();
+            if (tvDataSourceBadge != null) {
+                tvDataSourceBadge.animate().alpha(0.85f).setDuration(200).start();
+            }
         }
         
         // Ensure everything is fully visible
@@ -1548,6 +1440,9 @@ public class MainActivity extends AppCompatActivity {
         ivBatteryContainer.setAlpha(1.0f);
         ivAlarmBell.setAlpha(1.0f);
         ivExit.setAlpha(1.0f);
+        if (tvDataSourceBadge != null) {
+            tvDataSourceBadge.setAlpha(0.85f);
+        }
     }
 
     private void fadeAttributesOut() {
@@ -1556,6 +1451,9 @@ public class MainActivity extends AppCompatActivity {
         ivBatteryContainer.animate().alpha(0.0f).setDuration(1500).start();
         ivExit.animate().alpha(0.0f).setDuration(1500).start();
         ivAlarmBell.animate().alpha(0.0f).setDuration(1500).start();
+        if (tvDataSourceBadge != null) {
+            tvDataSourceBadge.animate().alpha(0.35f).setDuration(1500).start();
+        }
     }
 
     /**
@@ -1876,7 +1774,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void triggerSilentSubnetAutoDiscovery() {
         if (disableAutoScan || isAutoScanningSubnet || isActivityDestroyed) return;
-        if (!"network".equals(dataSource)) return;
+        if (!sourceWifiEnabled) return;
 
         final String currentIp = serverIp != null ? serverIp.trim() : "";
         final String secret = cachedSecretHash;
