@@ -3,7 +3,7 @@
     <string name="title_settings">Настройки DiaNight</string>
     
     <!-- Settings Screen Labels -->
-    <string name="label_ip_address">IP-адрес xDrip+ / Nightscout</string>
+    <string name="label_ip_address">IP-адрес xDrip+ (Wi-Fi)</string>
     <string name="hint_ip_address">например, 192.168.0.111</string>
     
     <string name="label_api_secret">Секретный ключ (API Secret)</string>
@@ -132,7 +132,7 @@
     <string name="label_data_source">Источник данных</string>
     <string name="label_source_network">Сетевой (WiFi / xDrip+ Web Service)</string>
     <string name="label_source_broadcast">Локальный (Broadcast от xDrip+ без сети)</string>
-    <string name="label_core_config">Основная конфигурация</string>
+    <string name="label_core_config">Настройка Wi-Fi (xDrip+)</string>
     <string name="btn_test_connection">Проверить связь</string>
     <string name="btn_auto_search">Автопоиск</string>
     <string name="dialog_multiple_xdrip_title">Выберите устройство xDrip+</string>

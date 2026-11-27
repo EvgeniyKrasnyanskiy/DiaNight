@@ -819,6 +819,10 @@ public class SettingsActivity extends AppCompatActivity {
      * so previously saved valid values remain intact.
      */
     private void autoSaveSettings(boolean applyLanguage) {
+        autoSaveSettings(applyLanguage, false);
+    }
+
+    private void autoSaveSettings(boolean applyLanguage, boolean syncCommit) {
         SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
 
         boolean srcBroadcast = chkSourceBroadcast.isChecked();
@@ -935,7 +939,11 @@ public class SettingsActivity extends AppCompatActivity {
         editor.putInt("glucose_brightness", sbGlucoseBrightness != null ? sbGlucoseBrightness.getProgress() : 80);
         editor.putString("alarm_sound_type", selectedSoundType);
         editor.putString("alarm_uri", selectedRingtoneUri);
-        editor.apply();
+        if (syncCommit) {
+            editor.commit();
+        } else {
+            editor.apply();
+        }
 
         if (applyLanguage) {
             applySelectedLanguage();
@@ -980,7 +988,7 @@ public class SettingsActivity extends AppCompatActivity {
             return;
         }
 
-        autoSaveSettings(true);
+        autoSaveSettings(true, true);
         Toast.makeText(this, getString(R.string.msg_saved), Toast.LENGTH_SHORT).show();
         finish();
     }
@@ -989,7 +997,7 @@ public class SettingsActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         if (!isLoadingSettings) {
-            autoSaveSettings(false);
+            autoSaveSettings(false, true);
         }
     }
 

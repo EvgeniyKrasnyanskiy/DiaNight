@@ -3,7 +3,7 @@
     <string name="title_settings">DiaNight Settings</string>
     
     <!-- Settings Screen Labels -->
-    <string name="label_ip_address">xDrip+ / Nightscout IP Address</string>
+    <string name="label_ip_address">xDrip+ IP Address (Wi-Fi)</string>
     <string name="hint_ip_address">e.g., 192.168.0.111</string>
     
     <string name="label_api_secret">API Secret / Key</string>
@@ -132,7 +132,7 @@
     <string name="label_data_source">Data Source</string>
     <string name="label_source_network">Network (Wi-Fi / xDrip+ Web Service)</string>
     <string name="label_source_broadcast">Local (Broadcast from xDrip+ without network)</string>
-    <string name="label_core_config">Core Configuration</string>
+    <string name="label_core_config">Wi-Fi Setup (xDrip+)</string>
     <string name="btn_test_connection">Test Connection</string>
     <string name="btn_auto_search">Auto-Discovery</string>
     <string name="dialog_multiple_xdrip_title">Select xDrip+ Device</string>

@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.1.82] - 2026-11-27
+
+### Changed
+- **Reliable Settings Persistence on Legacy Android (Sync Commit)**:
+  - Switched `SettingsActivity` `onPause()` and "Apply Settings" persistence to synchronous `SharedPreferences.Editor.commit()`, preventing settings loss on Android 4.4 KitKat if the app process closes immediately after editing.
+- **Clearer Wi-Fi Section Naming**:
+  - Renamed "Core Configuration" card to **Wi-Fi Setup (xDrip+)** / **Настройка Wi-Fi (xDrip+)** and IP field label to **xDrip+ IP Address (Wi-Fi)** / **IP-адрес xDrip+ (Wi-Fi)** (removing outdated `/ Nightscout` mention now that Nightscout has its own dedicated card).
+
 ## [v1.1.81] - 2026-11-27
 
 ### Added
